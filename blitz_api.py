@@ -20,7 +20,18 @@ load_dotenv()
 
 # Configuration
 BASE_URL = "https://api.blitz-api.ai"
-API_KEY = os.getenv("BLITZ_API_KEY")
+
+def get_api_key():
+    """Get API key from Streamlit secrets or environment"""
+    # Try Streamlit secrets first (for Streamlit Cloud)
+    try:
+        import streamlit as st
+        if hasattr(st, 'secrets') and 'BLITZ_API_KEY' in st.secrets:
+            return st.secrets['BLITZ_API_KEY']
+    except:
+        pass
+    # Fall back to environment variable
+    return os.getenv("BLITZ_API_KEY")
 
 # Default cascade for Waterfall ICP Search (VP priority)
 DEFAULT_CASCADE = [
@@ -126,7 +137,7 @@ class BlitzAPI:
     """
 
     def __init__(self, api_key: str = None):
-        self.api_key = api_key or API_KEY
+        self.api_key = api_key or get_api_key()
         if not self.api_key:
             raise BlitzAPIError("BLITZ_API_KEY not found. Set it in .env or pass to constructor.")
 
