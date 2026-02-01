@@ -1130,15 +1130,18 @@ def page_categorize_niche():
         st.markdown("*Enter one niche per line. AI will classify companies into these (with fuzzy matching).*")
         niches_text = st.text_area(
             "Target Niches",
-            value="Marketing Agency\nB2B SaaS\nE-commerce",
+            value="",
             height=120,
             key="target_niches_input",
+            placeholder="Marketing, Advertising & PR\nB2B SaaS\nE-commerce\nHealthcare",
             help="Companies that don't match will be labeled 'Other - [AI suggestion]'"
         )
         predefined_niches = [n.strip() for n in niches_text.strip().split("\n") if n.strip()]
 
         if predefined_niches:
             st.info(f"Will classify into {len(predefined_niches)} niches: {', '.join(predefined_niches)}")
+        else:
+            st.warning("Enter at least one target niche above, or switch to 'Discover' mode.")
     else:
         st.info("AI will discover and group similar companies into niches automatically.")
 
