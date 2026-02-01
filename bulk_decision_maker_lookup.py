@@ -196,17 +196,20 @@ def process_companies(
             print(f"  [{idx}/{len(companies_to_process)}] {company['company_name'] or company['domain']}...", end=" ")
 
         try:
-            # Search for decision makers
+            # Search for decision makers (pass max_results to limit API calls)
             results = api.search_decision_makers(
                 company_domain=company['domain'],
+                company_size=max_results * 10,  # Trick to limit results via size heuristic
                 with_email=with_email
             )
 
             if results:
+                # Limit to requested max_results
+                results = results[:max_results]
                 stats['found'] += 1
                 stats['decision_makers_found'] += len(results)
 
-                for person in results[:max_results]:
+                for person in results:
                     all_results.append({
                         'Company Name': company['company_name'] or '',
                         'Company Domain': company['domain'],
