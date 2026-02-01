@@ -711,9 +711,11 @@ def page_normalize_names():
                 lambda x: name_to_normalized.get(x, x) if pd.notna(x) else x
             )
 
-            # Save and offer download
-            output_path = input_path.replace(".xlsx", "_normalized.xlsx").replace(".xls", "_normalized.xls")
-            df.to_excel(output_path, index=False)
+            # Save and offer download - properly handle file extension
+            import os.path
+            base_name, ext = os.path.splitext(input_path)
+            output_path = f"{base_name}_normalized.xlsx"
+            df.to_excel(output_path, index=False, engine='openpyxl')
 
             st.success(f"Normalized {len(results)} company names!")
 
@@ -863,7 +865,7 @@ def page_verify_emails():
                     if verified_data.get("leads"):
                         verified_df = pd.DataFrame(verified_data["leads"])
                         excel_path = str(tmp_dir / "verified_leads.xlsx")
-                        verified_df.to_excel(excel_path, index=False)
+                        verified_df.to_excel(excel_path, index=False, engine='openpyxl')
 
                         with open(excel_path, "rb") as f:
                             st.download_button(
@@ -1082,8 +1084,10 @@ def page_score_industries():
                 with st.expander("View All Results"):
                     st.dataframe(results_df)
 
-                # Download
-                output_path = input_path.replace(".csv", "_scored.csv")
+                # Download - properly handle file extension
+                import os.path
+                base_name, ext = os.path.splitext(input_path)
+                output_path = f"{base_name}_scored.csv"
                 results_df.to_csv(output_path, index=False)
 
                 with open(output_path, "rb") as f:
