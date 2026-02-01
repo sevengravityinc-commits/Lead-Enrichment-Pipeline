@@ -419,7 +419,7 @@ def page_single_lookup():
 
     lookup_type = st.radio(
         "What do you want to look up?",
-        ["Find Decision Makers at Company", "Get Work Email for Person", "Company Info from Domain"],
+        ["Find Decision Makers at Company", "Get Work Email for Person", "Get Phone Number", "Company Info from Domain"],
         horizontal=True
     )
 
@@ -517,6 +517,35 @@ def page_single_lookup():
 
                 except Exception as e:
                     st.error(f"Error: {str(e)}")
+
+    elif lookup_type == "Get Phone Number":
+        st.markdown("### Get Phone Number")
+        st.markdown("*Cost: 5 credits per lookup*")
+
+        linkedin_url = st.text_input(
+            "Person's LinkedIn URL",
+            placeholder="https://linkedin.com/in/johndoe",
+            key="phone_linkedin_url"
+        )
+
+        if st.button("📞 Find Phone", type="primary"):
+            if not linkedin_url:
+                st.warning("Please enter a LinkedIn URL")
+            else:
+                with st.spinner("Finding phone number..."):
+                    try:
+                        result = api.find_phone(linkedin_url)
+
+                        if result.found:
+                            st.success("Phone number found!")
+                            st.write(f"**Phone:** {result.phone}")
+                            if result.phone_type:
+                                st.write(f"**Type:** {result.phone_type}")
+                        else:
+                            st.warning("No phone number found for this person")
+
+                    except Exception as e:
+                        st.error(f"Error: {str(e)}")
 
     elif lookup_type == "Company Info from Domain":
         st.markdown("### Company Info")
