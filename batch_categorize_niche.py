@@ -24,7 +24,9 @@ except ImportError:
 
 
 # Configuration
-BATCH_SIZE = 50  # Companies per API call
+DEFAULT_BATCH_SIZE = 20  # Companies per API call (≤1000 records)
+LARGE_FILE_BATCH_SIZE = 50  # Companies per API call (>1000 records)
+LARGE_FILE_THRESHOLD = 1000  # Switch to larger batch size above this row count
 API_DELAY = 0.5  # Seconds between API calls (rate limiting)
 OPENROUTER_API_KEY = os.getenv('OPENROUTER_API_KEY')
 MODEL = "openai/gpt-4o-mini"  # Fast, cheap, accurate for classification
@@ -191,9 +193,17 @@ def process_excel_file(file_path: str, verbose: bool = True) -> Dict:
     # Get total rows
     total_rows = ws.max_row - 1  # Exclude header
 
+    # Dynamic batch sizing: use larger batches for files with >1000 records
+    if total_rows > LARGE_FILE_THRESHOLD:
+        batch_size = LARGE_FILE_BATCH_SIZE
+    else:
+        batch_size = DEFAULT_BATCH_SIZE
+
     if verbose:
-        print(f"Processing {total_rows} rows in batches of {BATCH_SIZE}...")
-        print(f"Estimated API calls: {(total_rows + BATCH_SIZE - 1) // BATCH_SIZE}")
+        print(f"Processing {total_rows} rows in batches of {batch_size}...")
+        if total_rows > LARGE_FILE_THRESHOLD:
+            print(f"  (Using larger batch size for {total_rows} records)")
+        print(f"Estimated API calls: {(total_rows + batch_size - 1) // batch_size}")
         print(f"Model: {MODEL}")
         print()
 
@@ -235,7 +245,7 @@ def process_excel_file(file_path: str, verbose: bool = True) -> Dict:
         batch_rows.append(row_idx)
 
         # Process batch when full
-        if len(batch) >= BATCH_SIZE:
+        if len(batch) >= batch_size:
             stats["batches"] += 1
 
             if verbose:
@@ -303,7 +313,7 @@ def main():
     print("BATCH NICHE CATEGORIZATION")
     print(f"{'='*60}")
     print(f"File: {file_path}")
-    print(f"Batch size: {BATCH_SIZE} companies per API call")
+    print(f"Batch size: dynamic (20 for ≤1000 rows, 50 for >1000 rows)")
     print(f"API: OpenRouter ({MODEL})")
     print()
 

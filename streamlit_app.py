@@ -621,12 +621,20 @@ def page_identify_dm():
 
 
 def page_normalize_names():
-    """Normalize Company Names tool"""
+    """Normalize Company Names tool - with checkpointing for large files"""
     st.title("✨ Normalize Company Names")
     st.markdown("Clean company names for email personalization.")
     st.markdown("Example: 'Seven Gravity Inc.' → 'Seven Gravity'")
 
     tools = import_tools()
+
+    # Initialize session state for checkpointing
+    if 'normalize_checkpoint_data' not in st.session_state:
+        st.session_state.normalize_checkpoint_data = None
+    if 'normalize_resume_mode' not in st.session_state:
+        st.session_state.normalize_resume_mode = False
+    if 'normalize_cancel_requested' not in st.session_state:
+        st.session_state.normalize_cancel_requested = False
 
     # Single name normalization
     st.markdown("### Quick Normalize (Single)")
@@ -660,7 +668,7 @@ def page_normalize_names():
         help="The column containing company names"
     )
 
-    if uploaded_file and st.button("🚀 Normalize All", type="primary"):
+    if uploaded_file:
         input_path = save_uploaded_file(uploaded_file)
 
         try:
@@ -669,7 +677,6 @@ def page_normalize_names():
 
             # Find company column
             if company_col not in df.columns:
-                # Try common variations
                 for col in ["Company Name", "company", "company_name", "Organization"]:
                     if col in df.columns:
                         company_col_found = col
@@ -681,57 +688,155 @@ def page_normalize_names():
                 company_col_found = company_col
 
             company_names = df[company_col_found].dropna().tolist()
-            st.info(f"Normalizing {len(company_names)} company names...")
+            st.write(f"**Found {len(company_names):,} company names to normalize**")
 
-            # Import and run batch normalization
-            from normalize_company_name import normalize_batch
-
-            progress = st.progress(0)
-            status = st.empty()
-
-            # Process in smaller batches with progress
-            batch_size = 50
-            results = []
-            total = len(company_names)
-
-            for i in range(0, total, batch_size):
-                batch = company_names[i:i+batch_size]
-                batch_results = normalize_batch(batch, delay=0.5)
-                results.extend(batch_results)
-                progress.progress(min((i + batch_size) / total, 1.0))
-                status.text(f"Processed {min(i + batch_size, total)}/{total} names...")
-
-            # Add results to dataframe
-            normalized_names = [r.normalized for r in results]
-            df["Clean_Company_Name"] = None
-
-            # Map back to original rows
-            name_to_normalized = {r.original: r.normalized for r in results}
-            df["Clean_Company_Name"] = df[company_col_found].apply(
-                lambda x: name_to_normalized.get(x, x) if pd.notna(x) else x
-            )
-
-            # Save and offer download - properly handle file extension
-            import os.path
-            base_name, ext = os.path.splitext(input_path)
-            output_path = f"{base_name}_normalized.xlsx"
-            df.to_excel(output_path, index=False, engine='openpyxl')
-
-            st.success(f"Normalized {len(results)} company names!")
-
-            # Show preview
-            st.markdown("### Preview")
-            preview_df = df[[company_col_found, "Clean_Company_Name"]].head(20)
-            st.dataframe(preview_df)
-
-            # Download button
-            with open(output_path, "rb") as f:
-                st.download_button(
-                    "📥 Download Normalized File",
-                    f,
-                    file_name=os.path.basename(output_path),
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            # Check for existing checkpoint
+            try:
+                from categorize_company_niche import (
+                    get_file_hash, get_checkpoint_path, load_checkpoint,
+                    save_checkpoint, delete_checkpoint
                 )
+
+                file_hash = get_file_hash(input_path)
+                checkpoint_path = get_checkpoint_path(f"normalize_{file_hash}")
+                existing_checkpoint = load_checkpoint(checkpoint_path)
+
+                if existing_checkpoint:
+                    processed_count = len(existing_checkpoint.get('results', []))
+                    total_count = existing_checkpoint.get('total', 0)
+                    last_updated = existing_checkpoint.get('last_updated', 'Unknown')
+
+                    st.warning(f"⏸️ **Found checkpoint**: {processed_count:,}/{total_count:,} normalized (last: {last_updated})")
+
+                    col_resume, col_fresh, col_clear = st.columns([2, 2, 1])
+                    with col_resume:
+                        if st.button("▶️ Resume", key="normalize_resume"):
+                            st.session_state.normalize_checkpoint_data = existing_checkpoint
+                            st.session_state.normalize_resume_mode = True
+                    with col_fresh:
+                        if st.button("🔄 Start fresh", key="normalize_fresh"):
+                            delete_checkpoint(checkpoint_path)
+                            st.session_state.normalize_checkpoint_data = None
+                            st.session_state.normalize_resume_mode = False
+                            st.rerun()
+                    with col_clear:
+                        if st.button("🗑️", key="normalize_clear"):
+                            delete_checkpoint(checkpoint_path)
+                            st.rerun()
+            except ImportError:
+                file_hash = None
+                checkpoint_path = None
+
+            # Start/Cancel buttons
+            col1, col2 = st.columns([3, 1])
+            with col1:
+                btn_label = "▶️ Continue" if st.session_state.normalize_resume_mode else "🚀 Normalize All"
+                start_button = st.button(btn_label, type="primary", key="normalize_start")
+            with col2:
+                if st.button("🛑 Cancel", key="normalize_cancel"):
+                    st.session_state.normalize_cancel_requested = True
+
+            if start_button:
+                st.session_state.normalize_cancel_requested = False
+
+                try:
+                    from normalize_company_name import normalize_batch
+                    from categorize_company_niche import save_checkpoint, delete_checkpoint
+                    from datetime import datetime
+
+                    # Initialize from checkpoint if resuming
+                    if st.session_state.normalize_resume_mode and st.session_state.normalize_checkpoint_data:
+                        results_data = st.session_state.normalize_checkpoint_data.get('results', [])
+                        processed_names = set(st.session_state.normalize_checkpoint_data.get('processed_names', []))
+                        st.info(f"▶️ Resuming: {len(processed_names):,} already done")
+                    else:
+                        results_data = []
+                        processed_names = set()
+
+                    progress = st.progress(len(processed_names) / len(company_names) if company_names else 0)
+                    status = st.empty()
+
+                    batch_size = 50
+                    total = len(company_names)
+                    checkpoint_interval = 5
+                    batches_since_checkpoint = 0
+
+                    checkpoint_data = {
+                        'file_hash': file_hash,
+                        'file_name': uploaded_file.name,
+                        'total': total,
+                        'results': results_data,
+                        'processed_names': list(processed_names),
+                        'started_at': st.session_state.normalize_checkpoint_data.get('started_at', datetime.now().isoformat()) if st.session_state.normalize_checkpoint_data else datetime.now().isoformat()
+                    }
+
+                    for i in range(0, total, batch_size):
+                        if st.session_state.normalize_cancel_requested:
+                            checkpoint_data['results'] = results_data
+                            checkpoint_data['processed_names'] = list(processed_names)
+                            save_checkpoint(checkpoint_path, checkpoint_data)
+                            st.warning(f"⏸️ Paused at {len(processed_names):,}/{total:,}. Progress saved!")
+                            break
+
+                        # Get names not yet processed
+                        batch_names = [n for n in company_names[i:i+batch_size] if n not in processed_names]
+                        if not batch_names:
+                            continue
+
+                        status.text(f"Processing batch {i//batch_size + 1}... ({len(processed_names):,}/{total:,})")
+
+                        batch_results = normalize_batch(batch_names, delay=0.5)
+                        for r in batch_results:
+                            results_data.append({'original': r.original, 'normalized': r.normalized})
+                            processed_names.add(r.original)
+
+                        batches_since_checkpoint += 1
+                        if batches_since_checkpoint >= checkpoint_interval:
+                            checkpoint_data['results'] = results_data
+                            checkpoint_data['processed_names'] = list(processed_names)
+                            save_checkpoint(checkpoint_path, checkpoint_data)
+                            batches_since_checkpoint = 0
+
+                        progress.progress(len(processed_names) / total)
+
+                    # Processing complete
+                    status.empty()
+                    st.session_state.normalize_resume_mode = False
+                    st.session_state.normalize_checkpoint_data = None
+
+                    if len(processed_names) >= total:
+                        delete_checkpoint(checkpoint_path)
+
+                    if results_data:
+                        # Map results back to dataframe
+                        name_to_normalized = {r['original']: r['normalized'] for r in results_data}
+                        df["Clean_Company_Name"] = df[company_col_found].apply(
+                            lambda x: name_to_normalized.get(x, x) if pd.notna(x) else x
+                        )
+
+                        import os.path
+                        base_name, ext = os.path.splitext(input_path)
+                        output_path = f"{base_name}_normalized.xlsx"
+                        df.to_excel(output_path, index=False, engine='openpyxl')
+
+                        st.success(f"✅ Normalized {len(results_data):,} company names!")
+
+                        st.markdown("### Preview")
+                        preview_df = df[[company_col_found, "Clean_Company_Name"]].head(20)
+                        st.dataframe(preview_df)
+
+                        with open(output_path, "rb") as f:
+                            st.download_button(
+                                "📥 Download Normalized File",
+                                f,
+                                file_name=os.path.basename(output_path),
+                                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                            )
+
+                except Exception as e:
+                    st.error(f"Error: {str(e)}")
+                    import traceback
+                    st.code(traceback.format_exc())
 
         except Exception as e:
             st.error(f"Error: {str(e)}")
@@ -747,6 +852,7 @@ def page_verify_emails():
     tools = import_tools()
 
     st.warning("⚠️ Email verification uses API credits. Use carefully.")
+    st.info("💡 **Tip**: For large files (500+ emails), process in batches of 200-300 to avoid timeouts.")
 
     verification_type = st.radio(
         "Verification Type",
@@ -969,7 +1075,7 @@ def page_verify_emails():
 
 
 def page_score_industries():
-    """Score Industries tool"""
+    """Score Industries tool - with checkpointing"""
     st.title("📊 Score Industries")
     st.markdown("Evaluate industries for cold email lead gen viability.")
     st.markdown("""
@@ -980,6 +1086,14 @@ def page_score_industries():
     - TAM Threshold: 50K+ businesses in market
     """)
 
+    # Initialize session state for checkpointing
+    if 'score_checkpoint_data' not in st.session_state:
+        st.session_state.score_checkpoint_data = None
+    if 'score_resume_mode' not in st.session_state:
+        st.session_state.score_resume_mode = False
+    if 'score_cancel_requested' not in st.session_state:
+        st.session_state.score_cancel_requested = False
+
     uploaded_file = st.file_uploader(
         "Upload CSV with Industry and Sub Industry columns",
         type=["csv"],
@@ -987,7 +1101,7 @@ def page_score_industries():
         help="File must have 'Industry' and 'Sub Industry' columns"
     )
 
-    if uploaded_file and st.button("🚀 Score Industries", type="primary"):
+    if uploaded_file:
         input_path = save_uploaded_file(uploaded_file)
 
         try:
@@ -1000,106 +1114,217 @@ def page_score_industries():
                 st.error(f"Missing required columns: {missing}. Available: {list(df.columns)}")
                 return
 
-            st.info("Scoring industries using GPT-4o-mini (via OpenRouter)...")
-
-            # Import and run
+            # Check for existing checkpoint
             try:
-                from score_industries import extract_industries_from_csv, score_industries_batch, IndustryScore, get_tier
+                from categorize_company_niche import (
+                    get_file_hash, get_checkpoint_path, load_checkpoint,
+                    save_checkpoint, delete_checkpoint
+                )
 
-                # Check API key
-                import os
-                if not os.getenv("OPENROUTER_API_KEY"):
-                    st.error("OPENROUTER_API_KEY not set in environment")
-                    return
+                file_hash = get_file_hash(input_path)
+                checkpoint_path = get_checkpoint_path(f"score_{file_hash}")
+                existing_checkpoint = load_checkpoint(checkpoint_path)
 
-                # Extract unique industries
-                industries = extract_industries_from_csv(input_path)
-                st.write(f"Found **{len(industries)}** unique sub-industries")
+                if existing_checkpoint:
+                    processed_count = len(existing_checkpoint.get('scored_industries', []))
+                    total_count = existing_checkpoint.get('total', 0)
+                    last_updated = existing_checkpoint.get('last_updated', 'Unknown')
 
-                # Process in batches
-                all_scores = []
-                batch_size = 12
-                total_batches = (len(industries) + batch_size - 1) // batch_size
+                    st.warning(f"⏸️ **Found checkpoint**: {processed_count}/{total_count} scored (last: {last_updated})")
 
-                progress = st.progress(0)
-                status = st.empty()
+                    col_resume, col_fresh, col_clear = st.columns([2, 2, 1])
+                    with col_resume:
+                        if st.button("▶️ Resume", key="score_resume"):
+                            st.session_state.score_checkpoint_data = existing_checkpoint
+                            st.session_state.score_resume_mode = True
+                    with col_fresh:
+                        if st.button("🔄 Start fresh", key="score_fresh"):
+                            delete_checkpoint(checkpoint_path)
+                            st.session_state.score_checkpoint_data = None
+                            st.session_state.score_resume_mode = False
+                            st.rerun()
+                    with col_clear:
+                        if st.button("🗑️", key="score_clear"):
+                            delete_checkpoint(checkpoint_path)
+                            st.rerun()
+            except ImportError:
+                file_hash = None
+                checkpoint_path = None
 
-                for i in range(0, len(industries), batch_size):
-                    batch = industries[i:i + batch_size]
-                    batch_num = i // batch_size + 1
-                    status.text(f"Scoring batch {batch_num}/{total_batches}...")
+            # Start/Cancel buttons
+            col1, col2 = st.columns([3, 1])
+            with col1:
+                btn_label = "▶️ Continue" if st.session_state.score_resume_mode else "🚀 Score Industries"
+                start_button = st.button(btn_label, type="primary", key="score_start")
+            with col2:
+                if st.button("🛑 Cancel", key="score_cancel"):
+                    st.session_state.score_cancel_requested = True
 
-                    scores = score_industries_batch(batch)
-                    all_scores.extend(scores)
+            if start_button:
+                st.session_state.score_cancel_requested = False
+                st.info("Scoring industries using GPT-4o-mini (via OpenRouter)...")
 
-                    progress.progress(batch_num / total_batches)
+                try:
+                    from score_industries import extract_industries_from_csv, score_industries_batch, IndustryScore, get_tier
+                    from categorize_company_niche import save_checkpoint, delete_checkpoint
+                    from datetime import datetime
 
-                # Sort by tier and score
-                all_scores.sort(key=lambda x: (
-                    {"A": 0, "B": 1, "C": 2}.get(x.tier, 3),
-                    -x.total_score,
-                    -x.lead_count
-                ))
+                    # Check API key
+                    import os
+                    if not os.getenv("OPENROUTER_API_KEY"):
+                        st.error("OPENROUTER_API_KEY not set in environment")
+                        return
 
-                st.success("Scoring complete!")
+                    # Extract unique industries
+                    industries = extract_industries_from_csv(input_path)
+                    st.write(f"Found **{len(industries)}** unique sub-industries")
 
-                # Show summary
-                from collections import Counter
-                tier_counts = Counter(s.tier for s in all_scores)
+                    # Initialize from checkpoint if resuming
+                    if st.session_state.score_resume_mode and st.session_state.score_checkpoint_data:
+                        scored_data = st.session_state.score_checkpoint_data.get('scored_industries', [])
+                        processed_keys = set(st.session_state.score_checkpoint_data.get('processed_keys', []))
+                        st.info(f"▶️ Resuming: {len(processed_keys)} already scored")
+                    else:
+                        scored_data = []
+                        processed_keys = set()
 
-                col1, col2, col3 = st.columns(3)
-                with col1:
-                    tier_a = tier_counts.get("A", 0)
-                    st.metric("Tier A (Prioritize)", tier_a)
-                with col2:
-                    tier_b = tier_counts.get("B", 0)
-                    st.metric("Tier B (Include)", tier_b)
-                with col3:
-                    tier_c = tier_counts.get("C", 0)
-                    st.metric("Tier C (Deprioritize)", tier_c)
+                    # Process in batches
+                    batch_size = 12
+                    total_batches = (len(industries) + batch_size - 1) // batch_size
+                    checkpoint_interval = 3
+                    batches_since_checkpoint = 0
 
-                # Convert to DataFrame
-                results_df = pd.DataFrame([
-                    {
-                        "Industry": s.industry,
-                        "Sub Industry": s.sub_industry,
-                        "Lead Count": s.lead_count,
-                        "Ease of Selling": s.ease_of_selling,
-                        "Ease of Fulfillment": s.ease_of_fulfillment,
-                        "LTV Meets Threshold": s.ltv_meets_threshold,
-                        "TAM Meets Threshold": s.tam_meets_threshold,
-                        "Total Score": s.total_score,
-                        "Tier": s.tier,
-                        "Reasoning": s.reasoning
+                    checkpoint_data = {
+                        'file_hash': file_hash,
+                        'file_name': uploaded_file.name,
+                        'total': len(industries),
+                        'scored_industries': scored_data,
+                        'processed_keys': list(processed_keys),
+                        'started_at': st.session_state.score_checkpoint_data.get('started_at', datetime.now().isoformat()) if st.session_state.score_checkpoint_data else datetime.now().isoformat()
                     }
-                    for s in all_scores
-                ])
 
-                # Show Tier A
-                st.markdown("### Top Tier A Industries")
-                tier_a_df = results_df[results_df["Tier"] == "A"].head(10)
-                st.dataframe(tier_a_df)
+                    progress = st.progress(len(processed_keys) / len(industries) if industries else 0)
+                    status = st.empty()
 
-                # Full results
-                with st.expander("View All Results"):
-                    st.dataframe(results_df)
+                    for i in range(0, len(industries), batch_size):
+                        if st.session_state.score_cancel_requested:
+                            checkpoint_data['scored_industries'] = scored_data
+                            checkpoint_data['processed_keys'] = list(processed_keys)
+                            save_checkpoint(checkpoint_path, checkpoint_data)
+                            st.warning(f"⏸️ Paused at {len(processed_keys)}/{len(industries)}. Progress saved!")
+                            break
 
-                # Download - properly handle file extension
-                import os.path
-                base_name, ext = os.path.splitext(input_path)
-                output_path = f"{base_name}_scored.csv"
-                results_df.to_csv(output_path, index=False)
+                        # Get industries not yet processed
+                        batch = [ind for ind in industries[i:i + batch_size]
+                                 if f"{ind.industry}|{ind.sub_industry}" not in processed_keys]
 
-                with open(output_path, "rb") as f:
-                    st.download_button(
-                        "📥 Download Scored Industries (CSV)",
-                        f,
-                        file_name="scored_industries.csv",
-                        mime="text/csv"
-                    )
+                        if not batch:
+                            continue
 
-            except ImportError as e:
-                st.error(f"Required module not available: {e}")
+                        batch_num = i // batch_size + 1
+                        status.text(f"Scoring batch {batch_num}/{total_batches}... ({len(processed_keys)}/{len(industries)})")
+
+                        scores = score_industries_batch(batch)
+                        for s in scores:
+                            key = f"{s.industry}|{s.sub_industry}"
+                            processed_keys.add(key)
+                            scored_data.append({
+                                'industry': s.industry,
+                                'sub_industry': s.sub_industry,
+                                'lead_count': s.lead_count,
+                                'ease_of_selling': s.ease_of_selling,
+                                'ease_of_fulfillment': s.ease_of_fulfillment,
+                                'ltv_meets_threshold': s.ltv_meets_threshold,
+                                'tam_meets_threshold': s.tam_meets_threshold,
+                                'total_score': s.total_score,
+                                'tier': s.tier,
+                                'reasoning': s.reasoning
+                            })
+
+                        batches_since_checkpoint += 1
+                        if batches_since_checkpoint >= checkpoint_interval:
+                            checkpoint_data['scored_industries'] = scored_data
+                            checkpoint_data['processed_keys'] = list(processed_keys)
+                            save_checkpoint(checkpoint_path, checkpoint_data)
+                            batches_since_checkpoint = 0
+
+                        progress.progress(len(processed_keys) / len(industries))
+
+                    # Processing complete
+                    status.empty()
+                    st.session_state.score_resume_mode = False
+                    st.session_state.score_checkpoint_data = None
+
+                    if len(processed_keys) >= len(industries):
+                        delete_checkpoint(checkpoint_path)
+
+                    if scored_data:
+                        # Sort by tier and score
+                        scored_data.sort(key=lambda x: (
+                            {"A": 0, "B": 1, "C": 2}.get(x['tier'], 3),
+                            -x['total_score'],
+                            -x['lead_count']
+                        ))
+
+                        st.success(f"✅ Scored {len(scored_data)} industries!")
+
+                        # Show summary
+                        from collections import Counter
+                        tier_counts = Counter(s['tier'] for s in scored_data)
+
+                        col1, col2, col3 = st.columns(3)
+                        with col1:
+                            tier_a = tier_counts.get("A", 0)
+                            st.metric("Tier A (Prioritize)", tier_a)
+                        with col2:
+                            tier_b = tier_counts.get("B", 0)
+                            st.metric("Tier B (Include)", tier_b)
+                        with col3:
+                            tier_c = tier_counts.get("C", 0)
+                            st.metric("Tier C (Deprioritize)", tier_c)
+
+                        # Convert to DataFrame
+                        results_df = pd.DataFrame([
+                            {
+                                "Industry": s['industry'],
+                                "Sub Industry": s['sub_industry'],
+                                "Lead Count": s['lead_count'],
+                                "Ease of Selling": s['ease_of_selling'],
+                                "Ease of Fulfillment": s['ease_of_fulfillment'],
+                                "LTV Meets Threshold": s['ltv_meets_threshold'],
+                                "TAM Meets Threshold": s['tam_meets_threshold'],
+                                "Total Score": s['total_score'],
+                                "Tier": s['tier'],
+                                "Reasoning": s['reasoning']
+                            }
+                            for s in scored_data
+                        ])
+
+                        # Show Tier A
+                        st.markdown("### Top Tier A Industries")
+                        tier_a_df = results_df[results_df["Tier"] == "A"].head(10)
+                        st.dataframe(tier_a_df)
+
+                        # Full results
+                        with st.expander("View All Results"):
+                            st.dataframe(results_df)
+
+                        # Download
+                        import os.path
+                        base_name, ext = os.path.splitext(input_path)
+                        output_path = f"{base_name}_scored.csv"
+                        results_df.to_csv(output_path, index=False)
+
+                        with open(output_path, "rb") as f:
+                            st.download_button(
+                                "📥 Download Scored Industries (CSV)",
+                                f,
+                                file_name="scored_industries.csv",
+                                mime="text/csv"
+                            )
+
+                except ImportError as e:
+                    st.error(f"Required module not available: {e}")
 
         except Exception as e:
             st.error(f"Error: {str(e)}")
@@ -1108,15 +1333,19 @@ def page_score_industries():
 
 
 def page_categorize_niche():
-    """Categorize Company Niche tool - Enhanced with batch mode"""
+    """Categorize Company Niche tool - Enhanced with batch mode and checkpointing"""
     st.title("🏷️ Categorize Company Niche")
     st.markdown("Determine the primary niche of companies for targeting.")
 
-    # Initialize session state for cancel
+    # Initialize session state for cancel and checkpointing
     if 'niche_cancel_requested' not in st.session_state:
         st.session_state.niche_cancel_requested = False
     if 'niche_processing' not in st.session_state:
         st.session_state.niche_processing = False
+    if 'niche_checkpoint_data' not in st.session_state:
+        st.session_state.niche_checkpoint_data = None
+    if 'niche_resume_mode' not in st.session_state:
+        st.session_state.niche_resume_mode = False
 
     # Mode selection
     st.markdown("### Choose Mode")
@@ -1238,17 +1467,81 @@ def page_categorize_niche():
             # Processing mode info
             batch_threshold = 500
             use_batching = len(df) >= batch_threshold
-            batch_size = 20 if use_batching else 1
+            # Use larger batches for big files (faster but slightly less accurate)
+            if len(df) > 1000:
+                batch_size = 50  # ~92-95% accuracy, 2x faster
+            elif use_batching:
+                batch_size = 20  # ~95-98% accuracy
+            else:
+                batch_size = 1   # Precision mode
 
             if use_batching:
-                st.info(f"📦 **Batch Mode**: {len(df):,} records will be processed in batches of {batch_size} (~{len(df) // batch_size + 1} API calls)")
+                speed_note = " (optimized for speed)" if batch_size == 50 else ""
+                st.info(f"📦 **Batch Mode**: {len(df):,} records in batches of {batch_size}{speed_note} (~{len(df) // batch_size + 1} API calls)")
             else:
                 st.info(f"🎯 **Precision Mode**: {len(df)} records will be processed one at a time for maximum accuracy")
+
+            # Check for existing checkpoint
+            try:
+                from categorize_company_niche import (
+                    get_file_hash, get_checkpoint_path, load_checkpoint,
+                    save_checkpoint, delete_checkpoint
+                )
+
+                # Save file temporarily to get hash
+                temp_input_path = save_uploaded_file(uploaded_file)
+                file_hash = get_file_hash(temp_input_path)
+                checkpoint_path = get_checkpoint_path(file_hash)
+                existing_checkpoint = load_checkpoint(checkpoint_path)
+
+                if existing_checkpoint and not st.session_state.niche_processing:
+                    processed_count = len(existing_checkpoint.get('processed_indices', []))
+                    total_count = existing_checkpoint.get('total_rows', 0)
+                    last_updated = existing_checkpoint.get('last_updated', 'Unknown')
+
+                    st.warning(f"⏸️ **Found checkpoint**: {processed_count:,}/{total_count:,} rows processed (last updated: {last_updated})")
+
+                    col_resume, col_fresh, col_clear = st.columns([2, 2, 1])
+                    with col_resume:
+                        resume_button = st.button("▶️ Resume from checkpoint", type="primary")
+                    with col_fresh:
+                        fresh_button = st.button("🔄 Start fresh")
+                    with col_clear:
+                        clear_button = st.button("🗑️ Clear")
+
+                    if clear_button:
+                        delete_checkpoint(checkpoint_path)
+                        st.session_state.niche_checkpoint_data = None
+                        st.session_state.niche_resume_mode = False
+                        st.rerun()
+
+                    if resume_button:
+                        st.session_state.niche_checkpoint_data = existing_checkpoint
+                        st.session_state.niche_resume_mode = True
+
+                    if fresh_button:
+                        delete_checkpoint(checkpoint_path)
+                        st.session_state.niche_checkpoint_data = None
+                        st.session_state.niche_resume_mode = False
+                else:
+                    st.session_state.niche_checkpoint_data = None
+                    st.session_state.niche_resume_mode = False
+
+            except ImportError:
+                # Checkpoint functions not available, continue without
+                st.session_state.niche_checkpoint_data = None
+                st.session_state.niche_resume_mode = False
+                file_hash = None
+                checkpoint_path = None
 
             # Start/Cancel buttons
             col1, col2 = st.columns([3, 1])
             with col1:
-                start_button = st.button("🚀 Start Categorization", type="primary", disabled=st.session_state.niche_processing)
+                # Show different button text based on resume mode
+                if st.session_state.niche_resume_mode:
+                    start_button = st.button("▶️ Continue Processing", type="primary", disabled=st.session_state.niche_processing)
+                else:
+                    start_button = st.button("🚀 Start Categorization", type="primary", disabled=st.session_state.niche_processing)
             with col2:
                 if st.session_state.niche_processing:
                     if st.button("🛑 Cancel", type="secondary"):
@@ -1268,6 +1561,14 @@ def page_categorize_niche():
 
                 try:
                     from categorize_company_niche import categorize_niche, categorize_niche_batch
+                    from categorize_company_niche import (
+                        get_file_hash, get_checkpoint_path, save_checkpoint, delete_checkpoint
+                    )
+                    from datetime import datetime
+
+                    # Get checkpoint path for this file
+                    file_hash = get_file_hash(input_path)
+                    checkpoint_path = get_checkpoint_path(file_hash)
 
                     # Prepare companies list
                     companies = []
@@ -1280,15 +1581,39 @@ def page_categorize_niche():
                         companies.append({"name": name, "content": content})
 
                     total = len(companies)
-                    st.info(f"Processing {total:,} companies...")
+
+                    # Initialize from checkpoint if resuming
+                    if st.session_state.niche_resume_mode and st.session_state.niche_checkpoint_data:
+                        results = st.session_state.niche_checkpoint_data.get('results', [])
+                        processed_indices = set(st.session_state.niche_checkpoint_data.get('processed_indices', []))
+                        st.info(f"▶️ Resuming: {len(processed_indices):,}/{total:,} already done, {total - len(processed_indices):,} remaining")
+                    else:
+                        results = []
+                        processed_indices = set()
+                        st.info(f"Processing {total:,} companies...")
 
                     # Progress tracking
-                    progress_bar = st.progress(0)
+                    initial_progress = len(processed_indices) / total if total > 0 else 0
+                    progress_bar = st.progress(initial_progress)
                     status_text = st.empty()
                     eta_text = st.empty()
 
-                    results = []
                     start_time = time.time()
+                    checkpoint_interval = 5  # Save every 5 batches
+                    batches_since_checkpoint = 0
+
+                    # Create checkpoint data structure
+                    checkpoint_data = {
+                        'file_hash': file_hash,
+                        'file_name': uploaded_file.name,
+                        'total_rows': total,
+                        'processed_indices': list(processed_indices),
+                        'results': results,
+                        'predefined_niches': predefined_niches,
+                        'mode': 'classify' if predefined_niches else 'discover',
+                        'batch_size': batch_size,
+                        'started_at': st.session_state.niche_checkpoint_data.get('started_at', datetime.now().isoformat()) if st.session_state.niche_checkpoint_data else datetime.now().isoformat()
+                    }
 
                     if use_batching:
                         # Batch mode
@@ -1297,27 +1622,56 @@ def page_categorize_niche():
                         for batch_idx in range(num_batches):
                             # Check for cancellation
                             if st.session_state.niche_cancel_requested:
-                                st.warning(f"Cancelled after {len(results)} companies.")
+                                # Save checkpoint before stopping
+                                checkpoint_data['processed_indices'] = list(processed_indices)
+                                checkpoint_data['results'] = results
+                                save_checkpoint(checkpoint_path, checkpoint_data)
+                                st.warning(f"⏸️ Paused at {len(results):,}/{total:,}. Progress saved - resume anytime!")
                                 break
 
                             batch_start = batch_idx * batch_size
                             batch_end = min(batch_start + batch_size, total)
-                            batch = companies[batch_start:batch_end]
 
-                            status_text.text(f"Batch {batch_idx + 1}/{num_batches} | Processing {batch_start + 1}-{batch_end} of {total:,}")
+                            # Skip batches that are already fully processed
+                            batch_indices = set(range(batch_start, batch_end))
+                            if batch_indices.issubset(processed_indices):
+                                continue
+
+                            # Get companies that haven't been processed yet
+                            batch_to_process = []
+                            batch_indices_to_process = []
+                            for i in range(batch_start, batch_end):
+                                if i not in processed_indices:
+                                    batch_to_process.append(companies[i])
+                                    batch_indices_to_process.append(i)
+
+                            if not batch_to_process:
+                                continue
+
+                            status_text.text(f"Batch {batch_idx + 1}/{num_batches} | Processing {len(batch_to_process)} companies")
 
                             batch_results = categorize_niche_batch(
-                                batch,
+                                batch_to_process,
                                 predefined_niches=predefined_niches,
                                 batch_size=batch_size
                             )
                             # Adjust indices to global position
-                            for r in batch_results:
-                                r["index"] = batch_start + r.get("index", 0)
+                            for i, r in enumerate(batch_results):
+                                r["index"] = batch_indices_to_process[i]
+                                processed_indices.add(batch_indices_to_process[i])
                             results.extend(batch_results)
 
+                            batches_since_checkpoint += 1
+
+                            # Save checkpoint every N batches
+                            if batches_since_checkpoint >= checkpoint_interval:
+                                checkpoint_data['processed_indices'] = list(processed_indices)
+                                checkpoint_data['results'] = results
+                                save_checkpoint(checkpoint_path, checkpoint_data)
+                                batches_since_checkpoint = 0
+
                             # Update progress
-                            progress = len(results) / total
+                            progress = len(processed_indices) / total
                             progress_bar.progress(progress)
 
                             # Calculate ETA
@@ -1330,12 +1684,21 @@ def page_categorize_niche():
 
                     else:
                         # Single mode (more accurate)
+                        items_since_checkpoint = 0
                         for i, company in enumerate(companies):
+                            # Skip already processed items
+                            if i in processed_indices:
+                                continue
+
                             if st.session_state.niche_cancel_requested:
-                                st.warning(f"Cancelled after {len(results)} companies.")
+                                # Save checkpoint before stopping
+                                checkpoint_data['processed_indices'] = list(processed_indices)
+                                checkpoint_data['results'] = results
+                                save_checkpoint(checkpoint_path, checkpoint_data)
+                                st.warning(f"⏸️ Paused at {len(results):,}/{total:,}. Progress saved - resume anytime!")
                                 break
 
-                            status_text.text(f"Processing {i + 1}/{total}: {company['name'][:40]}...")
+                            status_text.text(f"Processing {len(processed_indices) + 1}/{total}: {company['name'][:40]}...")
 
                             if predefined_niches:
                                 batch_results = categorize_niche_batch(
@@ -1344,7 +1707,6 @@ def page_categorize_niche():
                                     batch_size=1
                                 )
                                 if batch_results:
-                                    # Set correct global index
                                     batch_results[0]["index"] = i
                                     results.append(batch_results[0])
                             else:
@@ -1357,21 +1719,37 @@ def page_categorize_niche():
                                     "confidence": result.confidence
                                 })
 
-                            progress_bar.progress((i + 1) / total)
+                            processed_indices.add(i)
+                            items_since_checkpoint += 1
+
+                            # Save checkpoint every 100 items in single mode
+                            if items_since_checkpoint >= 100:
+                                checkpoint_data['processed_indices'] = list(processed_indices)
+                                checkpoint_data['results'] = results
+                                save_checkpoint(checkpoint_path, checkpoint_data)
+                                items_since_checkpoint = 0
+
+                            progress_bar.progress(len(processed_indices) / total)
 
                             # ETA calculation
                             elapsed = time.time() - start_time
-                            rate = (i + 1) / elapsed
-                            remaining = total - (i + 1)
+                            rate = len(processed_indices) / elapsed if elapsed > 0 else 1
+                            remaining = total - len(processed_indices)
                             eta_seconds = remaining / rate if rate > 0 else 0
-                            eta_text.text(f"⏱️ {int((i + 1) / total * 100)}% | ~{int(eta_seconds // 60)}m {int(eta_seconds % 60)}s remaining")
+                            eta_text.text(f"⏱️ {int(len(processed_indices) / total * 100)}% | ~{int(eta_seconds // 60)}m {int(eta_seconds % 60)}s remaining")
 
                             time.sleep(0.3)  # Small delay for rate limits
 
                     # Processing complete
                     st.session_state.niche_processing = False
+                    st.session_state.niche_resume_mode = False
+                    st.session_state.niche_checkpoint_data = None
                     status_text.empty()
                     eta_text.empty()
+
+                    # Delete checkpoint on successful completion (all items processed)
+                    if len(processed_indices) >= total and not st.session_state.niche_cancel_requested:
+                        delete_checkpoint(checkpoint_path)
 
                     if results:
                         # Add results to dataframe
