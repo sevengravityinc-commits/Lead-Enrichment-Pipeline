@@ -155,10 +155,18 @@ def import_tools():
 
 
 def get_config_files():
-    """Get list of available config files"""
+    """Get list of available campaign config files"""
     config_dir = Path(__file__).parent / "configs"
     if config_dir.exists():
-        return [f.name for f in config_dir.glob("*.json") if not f.name.startswith("_")]
+        # Exclude schema and reference files
+        exclude = ["campaign_config_schema.json", "target_roles_default.json"]
+        configs = [f.name for f in config_dir.glob("*.json")
+                   if not f.name.startswith("_") and f.name not in exclude]
+        # Put general.json first if it exists
+        if "general.json" in configs:
+            configs.remove("general.json")
+            configs.insert(0, "general.json")
+        return configs
     return []
 
 
