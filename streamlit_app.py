@@ -134,6 +134,12 @@ def import_tools():
         tools['blitz_api'] = None
 
     try:
+        from bulk_decision_maker_lookup import process_companies as bulk_dm_lookup
+        tools['bulk_dm_lookup'] = bulk_dm_lookup
+    except ImportError:
+        tools['bulk_dm_lookup'] = None
+
+    try:
         from millionverifier_api import verify_emails as mv_verify
         tools['millionverifier'] = mv_verify
     except ImportError:
@@ -616,6 +622,115 @@ def page_identify_dm():
                         )
                 else:
                     st.error("Identify Decision Makers tool not available")
+            except Exception as e:
+                st.error(f"Error: {str(e)}")
+
+
+def page_bulk_dm_lookup():
+    """Bulk Decision Maker Lookup - find DMs at companies via BlitzAPI"""
+    st.title("🔎 Bulk Decision Maker Lookup")
+    st.markdown("Find decision makers at companies using BlitzAPI. Requires company website/domain.")
+
+    tools = import_tools()
+
+    # Check API availability
+    if not tools.get('blitz_api'):
+        st.error("BlitzAPI not available. Check BLITZ_API_KEY in .env")
+        return
+
+    # Show credits
+    try:
+        api = tools['blitz_api']()
+        credits = api.get_key_info().remaining_credits
+        st.info(f"💳 BlitzAPI credits available: {credits:.0f}")
+    except Exception as e:
+        st.warning(f"Could not check credits: {e}")
+
+    # Input method tabs
+    tab1, tab2 = st.tabs(["📝 Paste Companies", "📁 Upload File"])
+
+    with tab1:
+        st.markdown("Paste company websites (one per line):")
+        company_text = st.text_area(
+            "Companies",
+            height=200,
+            placeholder="acme.com\nbeta.io\ngamma.com",
+            help="Enter one website/domain per line",
+            label_visibility="collapsed"
+        )
+
+    with tab2:
+        uploaded_file = st.file_uploader(
+            "Upload Excel/CSV with Company and Website columns",
+            type=["xlsx", "xls", "csv"],
+            help="Must have a Website/Domain column. Company Name is optional."
+        )
+
+    # Settings
+    col1, col2 = st.columns(2)
+    with col1:
+        max_results = st.slider("Decision makers per company", 1, 5, 2)
+    with col2:
+        with_email = st.checkbox("Get emails (extra credits)", value=True)
+
+    st.markdown("**Cost estimate:** ~2-4 credits per company (domain lookup + people + emails)")
+
+    # Determine input source
+    has_text_input = company_text and company_text.strip()
+    has_file_input = uploaded_file is not None
+
+    if st.button("🚀 Find Decision Makers", type="primary", disabled=not (has_text_input or has_file_input)):
+        # Create temp file from text input if needed
+        if has_text_input:
+            import tempfile
+            import pandas as pd
+
+            # Parse text input - one company per line
+            lines = [line.strip() for line in company_text.strip().split('\n') if line.strip()]
+
+            # Create DataFrame
+            df = pd.DataFrame({'Website': lines})
+
+            # Save to temp Excel file
+            tmp_dir = Path(tempfile.gettempdir())
+            input_path = tmp_dir / "bulk_dm_input.xlsx"
+            df.to_excel(input_path, index=False)
+            st.info(f"Processing {len(lines)} companies...")
+        else:
+            input_path = save_uploaded_file(uploaded_file)
+
+        with st.spinner("Finding decision makers..."):
+            try:
+                if tools.get('bulk_dm_lookup'):
+                    result = tools['bulk_dm_lookup'](
+                        str(input_path),
+                        max_results=max_results,
+                        with_email=with_email,
+                        verbose=False
+                    )
+
+                    if "error" in result:
+                        st.error(f"Error: {result['error']}")
+                    else:
+                        st.success(f"✅ Found {result.get('decision_makers_found', 0)} decision makers at {result.get('found', 0)} companies")
+
+                        # Show stats
+                        col1, col2, col3 = st.columns(3)
+                        col1.metric("Companies Processed", result.get('processed', 0))
+                        col2.metric("DMs Found", result.get('decision_makers_found', 0))
+                        col3.metric("Credits Used", f"{result.get('credits_used', 'N/A')}")
+
+                        # Download button
+                        if result.get('output_file'):
+                            with open(result['output_file'], "rb") as f:
+                                st.download_button(
+                                    "📥 Download Results",
+                                    f,
+                                    file_name=Path(result['output_file']).name,
+                                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                                )
+                else:
+                    st.error("Bulk DM Lookup tool not available")
             except Exception as e:
                 st.error(f"Error: {str(e)}")
 
@@ -1835,6 +1950,7 @@ def main():
             "📋 Lead Pipeline",
             "🔍 Single Lookups",
             "👤 Identify Decision Makers",
+            "🔎 Bulk DM Lookup",
             "✨ Normalize Names",
             "✅ Verify Emails"
         ],
@@ -1871,6 +1987,8 @@ def main():
         page_single_lookup()
     elif page == "👤 Identify Decision Makers":
         page_identify_dm()
+    elif page == "🔎 Bulk DM Lookup":
+        page_bulk_dm_lookup()
     elif page == "✨ Normalize Names":
         page_normalize_names()
     elif page == "🏷️ Categorize Niche":
