@@ -140,6 +140,14 @@ def import_tools():
         tools['bulk_dm_lookup'] = None
 
     try:
+        from smart_dm_enrichment import process_multiple_files as smart_dm_enrich, estimate_credits as smart_dm_estimate
+        tools['smart_dm_enrichment'] = smart_dm_enrich
+        tools['smart_dm_estimate'] = smart_dm_estimate
+    except ImportError:
+        tools['smart_dm_enrichment'] = None
+        tools['smart_dm_estimate'] = None
+
+    try:
         from millionverifier_api import verify_emails as mv_verify
         tools['millionverifier'] = mv_verify
     except ImportError:
@@ -744,6 +752,186 @@ def page_bulk_dm_lookup():
                     st.error("Bulk DM Lookup tool not available")
             except Exception as e:
                 st.error(f"Error: {str(e)}")
+
+
+def page_smart_dm_enrichment():
+    """Smart DM Enrichment - classify, verify, and find decision makers"""
+    st.title("🎯 Smart DM Enrichment")
+    st.markdown("""
+    **Intelligent lead enrichment that:**
+    - Classifies contacts as decision makers (AI-based)
+    - Verifies existing DMs via BlitzAPI
+    - Finds new decision makers at companies
+    - Updates outdated emails
+    """)
+
+    tools = import_tools()
+
+    # Check availability
+    if not tools.get('smart_dm_enrichment'):
+        st.error("Smart DM Enrichment not available. Check smart_dm_enrichment.py exists.")
+        return
+
+    if not tools.get('blitz_api'):
+        st.error("BlitzAPI not available. Check BLITZ_API_KEY in .env")
+        return
+
+    # Show credits
+    try:
+        api = tools['blitz_api']()
+        credits = api.get_key_info().remaining_credits
+        st.info(f"💳 BlitzAPI credits available: {credits:.0f}")
+    except Exception as e:
+        st.warning(f"Could not check credits: {e}")
+
+    # File upload (multiple files)
+    st.markdown("### Upload Files")
+    uploaded_files = st.file_uploader(
+        "Upload up to 3 Excel/CSV files",
+        type=["xlsx", "xls", "csv"],
+        accept_multiple_files=True,
+        help="Files should have Title, Email, Company, and/or Website columns"
+    )
+
+    if uploaded_files and len(uploaded_files) > 3:
+        st.error("Maximum 3 files allowed")
+        uploaded_files = uploaded_files[:3]
+
+    # Settings
+    st.markdown("### Settings")
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        max_new = st.slider("Max new DMs per company", 1, 3, 2)
+    with col2:
+        batch_size = st.slider("Batch size (lower = more reliable)", 10, 50, 20,
+                               help="Contacts per AI API call. Use 10-15 for large files (1000+ rows)")
+    with col3:
+        export_dm_csv = st.checkbox("Export DM-only CSV", value=False,
+                                    help="Also create a CSV with only decision makers")
+
+    col4, col5 = st.columns(2)
+    with col4:
+        estimate_only = st.checkbox("Estimate credits only", value=False)
+
+    # Status legend
+    with st.expander("📊 Status Codes Explained"):
+        st.markdown("""
+        | Status | Meaning |
+        |--------|---------|
+        | `verified` | DM confirmed, email is correct |
+        | `email_updated` | DM confirmed, email was updated |
+        | `email_added` | DM confirmed, email was missing, now added |
+        | `not_found` | DM by title but not found at company |
+        | `not_dm` | Not a decision maker by title |
+        | `new` | Newly found DM from BlitzAPI |
+        | `no_domain` | Could not find company domain |
+        """)
+
+    if uploaded_files:
+        # Save files to temp location
+        file_paths = []
+        for uf in uploaded_files:
+            path = save_uploaded_file(uf)
+            file_paths.append(str(path))
+
+        # Show credit estimate
+        if tools.get('smart_dm_estimate'):
+            try:
+                estimate = tools['smart_dm_estimate'](file_paths, verbose=False)
+                st.markdown("### Credit Estimate")
+                col1, col2, col3 = st.columns(3)
+                col1.metric("Total Contacts", estimate.get('total_contacts', 0))
+                col2.metric("Unique Companies", estimate.get('unique_companies', 0))
+                col3.metric("Est. Credits", f"{estimate.get('min_credits', 0)}-{estimate.get('max_credits', 0)}")
+
+                if credits < estimate.get('min_credits', 0):
+                    st.warning(f"⚠️ May not have enough credits. Need at least {estimate['min_credits']}, have {credits:.0f}")
+            except Exception as e:
+                st.warning(f"Could not estimate credits: {e}")
+
+        if estimate_only:
+            st.info("Estimate only mode - click 'Process Files' to run the full enrichment")
+
+        if st.button("🚀 Process Files", type="primary", disabled=estimate_only):
+            with st.spinner("Processing files... This may take a few minutes."):
+                try:
+                    result = tools['smart_dm_enrichment'](
+                        file_paths,
+                        max_new_per_company=max_new,
+                        batch_size=batch_size,
+                        export_dm_csv=export_dm_csv,
+                        verbose=False
+                    )
+
+                    if "error" in result:
+                        st.error(f"Error: {result['error']}")
+                    else:
+                        stats = result.get('total_stats')
+
+                        st.success(f"✅ Processed {len(result.get('files_processed', []))} files")
+
+                        # Show stats
+                        st.markdown("### Results Summary")
+                        col1, col2, col3, col4 = st.columns(4)
+                        col1.metric("Total Contacts", getattr(stats, 'total_contacts', 0))
+                        col2.metric("Verified", getattr(stats, 'verified', 0))
+                        col3.metric("New DMs Added", getattr(stats, 'new_dms_added', 0))
+                        col4.metric("Credits Used", getattr(stats, 'credits_used', 0))
+
+                        # Detailed stats
+                        with st.expander("Detailed Statistics"):
+                            st.write(f"- Skipped (already processed): {getattr(stats, 'skipped', 0)}")
+                            st.write(f"- Email updated: {getattr(stats, 'email_updated', 0)}")
+                            st.write(f"- Email added: {getattr(stats, 'email_added', 0)}")
+                            st.write(f"- Not found at company: {getattr(stats, 'not_found', 0)}")
+                            st.write(f"- Not decision makers: {getattr(stats, 'not_dm', 0)}")
+                            st.write(f"- No domain: {getattr(stats, 'no_domain', 0)}")
+                            st.write(f"- Errors: {getattr(stats, 'errors', 0)}")
+
+                        # Download buttons for each output file
+                        st.markdown("### Download Results")
+                        for output_file in result.get('output_files', []):
+                            output_path = Path(output_file)
+                            if output_path.exists():
+                                # Show preview
+                                import pandas as pd
+                                df = pd.read_excel(output_path)
+                                st.markdown(f"**{output_path.name}** ({len(df)} rows)")
+
+                                # Color-coded status
+                                if 'decision_status' in df.columns:
+                                    status_counts = df['decision_status'].value_counts().to_dict()
+                                    status_str = " | ".join([f"{k}: {v}" for k, v in status_counts.items()])
+                                    st.caption(status_str)
+
+                                with open(output_path, "rb") as f:
+                                    st.download_button(
+                                        f"📥 Download {output_path.name}",
+                                        f,
+                                        file_name=output_path.name,
+                                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                                        key=f"download_{output_path.name}"
+                                    )
+
+                        # DM-only CSV downloads
+                        if result.get('dm_csv_files'):
+                            st.markdown("### DM-Only CSV Files")
+                            for csv_file in result['dm_csv_files']:
+                                csv_path = Path(csv_file)
+                                if csv_path.exists():
+                                    with open(csv_path, "rb") as f:
+                                        st.download_button(
+                                            f"📥 Download {csv_path.name}",
+                                            f,
+                                            file_name=csv_path.name,
+                                            mime="text/csv",
+                                            key=f"download_csv_{csv_path.name}"
+                                        )
+
+                except Exception as e:
+                    st.error(f"Error: {str(e)}")
+                    import traceback
+                    st.code(traceback.format_exc())
 
 
 def page_normalize_names():
@@ -1962,6 +2150,7 @@ def main():
             "🔍 Single Lookups",
             "👤 Identify Decision Makers",
             "🔎 Bulk DM Lookup",
+            "🎯 Smart DM Enrichment",
             "✨ Normalize Names",
             "✅ Verify Emails"
         ],
@@ -2000,6 +2189,8 @@ def main():
         page_identify_dm()
     elif page == "🔎 Bulk DM Lookup":
         page_bulk_dm_lookup()
+    elif page == "🎯 Smart DM Enrichment":
+        page_smart_dm_enrichment()
     elif page == "✨ Normalize Names":
         page_normalize_names()
     elif page == "🏷️ Categorize Niche":
