@@ -346,6 +346,102 @@ def categorize_niche_batch(
     return all_results
 
 
+# ============================================================================
+# CHECKPOINT FUNCTIONS - For resumable batch processing
+# ============================================================================
+
+import hashlib
+from datetime import datetime
+from pathlib import Path
+
+
+def get_file_hash(file_path: str) -> str:
+    """Generate a hash of file contents for checkpoint identification."""
+    hasher = hashlib.md5()
+    with open(file_path, 'rb') as f:
+        # Read first 64KB to generate hash (fast for large files)
+        hasher.update(f.read(65536))
+    return hasher.hexdigest()[:12]
+
+
+def get_checkpoint_path(file_hash: str, base_dir: str = ".tmp") -> str:
+    """Get the checkpoint file path for a given file hash."""
+    Path(base_dir).mkdir(parents=True, exist_ok=True)
+    return str(Path(base_dir) / f"niche_checkpoint_{file_hash}.json")
+
+
+def save_checkpoint(checkpoint_path: str, data: dict) -> bool:
+    """
+    Save checkpoint data to JSON file.
+
+    Args:
+        checkpoint_path: Path to checkpoint file
+        data: Checkpoint data dict with keys:
+            - file_hash, file_name, total_rows
+            - processed_indices, results
+            - predefined_niches, mode, batch_size
+            - started_at, last_updated
+
+    Returns:
+        True if saved successfully
+    """
+    try:
+        data['last_updated'] = datetime.now().isoformat()
+        with open(checkpoint_path, 'w', encoding='utf-8') as f:
+            json.dump(data, f, indent=2)
+        return True
+    except Exception as e:
+        print(f"Warning: Failed to save checkpoint: {e}")
+        return False
+
+
+def load_checkpoint(checkpoint_path: str) -> Optional[dict]:
+    """
+    Load checkpoint data from JSON file.
+
+    Args:
+        checkpoint_path: Path to checkpoint file
+
+    Returns:
+        Checkpoint data dict or None if not found/invalid
+    """
+    try:
+        if not os.path.exists(checkpoint_path):
+            return None
+        with open(checkpoint_path, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except Exception as e:
+        print(f"Warning: Failed to load checkpoint: {e}")
+        return None
+
+
+def delete_checkpoint(checkpoint_path: str) -> bool:
+    """Delete checkpoint file after successful completion."""
+    try:
+        if os.path.exists(checkpoint_path):
+            os.remove(checkpoint_path)
+        return True
+    except Exception as e:
+        print(f"Warning: Failed to delete checkpoint: {e}")
+        return False
+
+
+def find_checkpoint_for_file(file_path: str, base_dir: str = ".tmp") -> Optional[dict]:
+    """
+    Find and load checkpoint for a specific file.
+
+    Args:
+        file_path: Path to the data file
+        base_dir: Directory where checkpoints are stored
+
+    Returns:
+        Checkpoint data if found and valid, None otherwise
+    """
+    file_hash = get_file_hash(file_path)
+    checkpoint_path = get_checkpoint_path(file_hash, base_dir)
+    return load_checkpoint(checkpoint_path)
+
+
 if __name__ == '__main__':
     import sys
 
