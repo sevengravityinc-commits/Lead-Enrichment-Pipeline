@@ -1104,46 +1104,86 @@ def page_score_industries():
 
 
 def page_categorize_niche():
-    """Categorize Company Niche tool"""
+    """Categorize Company Niche tool - Enhanced with batch mode"""
     st.title("🏷️ Categorize Company Niche")
     st.markdown("Determine the primary niche of companies for targeting.")
-    st.markdown("""
-    **Output Format:** Business Model - Industry - Sub-specialty
 
-    Examples:
-    - B2B SaaS - HR Tech - Recruiting
-    - Marketing Agency - Performance Marketing
-    - E-commerce - Fashion - Sustainable
-    """)
+    # Initialize session state for cancel
+    if 'niche_cancel_requested' not in st.session_state:
+        st.session_state.niche_cancel_requested = False
+    if 'niche_processing' not in st.session_state:
+        st.session_state.niche_processing = False
 
-    # Single company
-    st.markdown("### Quick Categorize (Single)")
+    # Mode selection
+    st.markdown("### Choose Mode")
+    mode = st.radio(
+        "Categorization Mode",
+        ["🎯 Classify into my niches", "🔍 Discover niches (AI decides)"],
+        horizontal=True,
+        help="Classify: You provide target niches. Discover: AI identifies niches automatically."
+    )
+
+    # Predefined niches input (only for Classify mode)
+    predefined_niches = None
+    if "Classify" in mode:
+        st.markdown("#### Your Target Niches")
+        st.markdown("*Enter one niche per line. AI will classify companies into these (with fuzzy matching).*")
+        niches_text = st.text_area(
+            "Target Niches",
+            value="Marketing Agency\nB2B SaaS\nE-commerce",
+            height=120,
+            key="target_niches_input",
+            help="Companies that don't match will be labeled 'Other - [AI suggestion]'"
+        )
+        predefined_niches = [n.strip() for n in niches_text.strip().split("\n") if n.strip()]
+
+        if predefined_niches:
+            st.info(f"Will classify into {len(predefined_niches)} niches: {', '.join(predefined_niches)}")
+    else:
+        st.info("AI will discover and group similar companies into niches automatically.")
+
+    st.markdown("---")
+
+    # Single company quick test
+    st.markdown("### Quick Test (Single Company)")
     col1, col2 = st.columns(2)
     with col1:
-        company_name = st.text_input("Company Name", placeholder="Acme Corp")
+        company_name = st.text_input("Company Name", placeholder="Acme Corp", key="single_company_name")
     with col2:
-        company_website = st.text_input("Website or Description", placeholder="acme.com or brief description")
+        company_website = st.text_input("Website or Description", placeholder="acme.com or brief description", key="single_company_content")
 
-    if st.button("Categorize", key="categorize_single"):
+    if st.button("🏷️ Categorize", key="categorize_single"):
         if not company_name and not company_website:
             st.warning("Please enter company name and/or website/description")
         else:
             try:
-                from categorize_company_niche import categorize_niche
+                from categorize_company_niche import categorize_niche, categorize_niche_batch
 
                 with st.spinner("Analyzing company..."):
                     content = company_website if company_website else company_name
-                    result = categorize_niche(content, company_name)
 
-                    if result.success:
-                        st.success(f"**Niche:** {result.niche}")
-                        col1, col2 = st.columns(2)
-                        with col1:
-                            st.write(f"**Confidence:** {result.confidence}")
-                        with col2:
-                            st.write(f"**Reasoning:** {result.reasoning}")
+                    if predefined_niches:
+                        # Use batch function even for single to test classify mode
+                        results = categorize_niche_batch(
+                            [{"name": company_name, "content": content}],
+                            predefined_niches=predefined_niches,
+                            batch_size=1
+                        )
+                        if results:
+                            r = results[0]
+                            st.success(f"**Niche:** {r.get('niche', 'Unknown')}")
+                            st.write(f"**Match Type:** {r.get('match_type', 'unknown')}")
                     else:
-                        st.error(f"Error: {result.error}")
+                        result = categorize_niche(content, company_name)
+                        if result.success:
+                            st.success(f"**Niche:** {result.niche}")
+                            col1, col2 = st.columns(2)
+                            with col1:
+                                st.write(f"**Confidence:** {result.confidence}")
+                            with col2:
+                                st.write(f"**Reasoning:** {result.reasoning}")
+                        else:
+                            st.error(f"Error: {result.error}")
             except Exception as e:
                 st.error(f"Error: {e}")
 
@@ -1151,112 +1191,240 @@ def page_categorize_niche():
 
     # Batch categorization
     st.markdown("### Batch Categorize (File)")
-    st.markdown("Upload an Excel file with company names and descriptions/websites to categorize multiple companies.")
+    st.markdown("Upload an Excel/CSV file with company names. Existing Industry/Sub-Industry columns will be ignored.")
 
     uploaded_file = st.file_uploader(
-        "Upload Excel file",
-        type=["xlsx", "xls"],
+        "Upload Excel or CSV file",
+        type=["xlsx", "xls", "csv"],
         key="categorize_batch_upload",
         help="Should have Company Name and optionally Website or Description columns"
     )
 
     if uploaded_file:
-        col1, col2 = st.columns(2)
-        with col1:
-            name_col = st.text_input("Company Name column", value="Company", key="niche_name_col")
-        with col2:
-            content_col = st.text_input("Website/Description column", value="Website", key="niche_content_col",
-                                        help="Leave empty to use company name only")
+        # Load file to show preview
+        try:
+            if uploaded_file.name.endswith('.csv'):
+                df = pd.read_csv(uploaded_file)
+            else:
+                df = pd.read_excel(uploaded_file)
 
-        if st.button("🚀 Categorize All", type="primary"):
-            input_path = save_uploaded_file(uploaded_file)
+            st.write(f"**Loaded {len(df):,} rows** | Columns: {', '.join(df.columns[:10])}")
 
-            try:
-                df = pd.read_excel(input_path)
+            # Column selection
+            col1, col2 = st.columns(2)
+            with col1:
+                name_col = st.selectbox(
+                    "Company Name column",
+                    options=df.columns.tolist(),
+                    index=0 if "Company" not in df.columns else df.columns.tolist().index("Company") if "Company" in df.columns else 0,
+                    key="niche_name_col"
+                )
+            with col2:
+                content_options = ["(Use company name only)"] + df.columns.tolist()
+                content_col = st.selectbox(
+                    "Website/Description column (optional)",
+                    options=content_options,
+                    index=0,
+                    key="niche_content_col"
+                )
 
-                # Find columns
-                if name_col not in df.columns:
-                    st.error(f"Column '{name_col}' not found. Available: {list(df.columns)}")
-                    return
+            # Processing mode info
+            batch_threshold = 500
+            use_batching = len(df) >= batch_threshold
+            batch_size = 20 if use_batching else 1
 
-                from categorize_company_niche import categorize_niche
+            if use_batching:
+                st.info(f"📦 **Batch Mode**: {len(df):,} records will be processed in batches of {batch_size} (~{len(df) // batch_size + 1} API calls)")
+            else:
+                st.info(f"🎯 **Precision Mode**: {len(df)} records will be processed one at a time for maximum accuracy")
 
-                # Prepare data
-                companies = []
-                for _, row in df.iterrows():
-                    company_name = row.get(name_col, "")
-                    content = row.get(content_col, "") if content_col and content_col in df.columns else ""
-                    if not content:
-                        content = company_name
-                    companies.append((company_name, content))
+            # Start/Cancel buttons
+            col1, col2 = st.columns([3, 1])
+            with col1:
+                start_button = st.button("🚀 Start Categorization", type="primary", disabled=st.session_state.niche_processing)
+            with col2:
+                if st.session_state.niche_processing:
+                    if st.button("🛑 Cancel", type="secondary"):
+                        st.session_state.niche_cancel_requested = True
+                        st.warning("Cancellation requested... will stop after current batch.")
 
-                # Process
-                st.info(f"Categorizing {len(companies)} companies... This may take a while.")
-                progress = st.progress(0)
-                status = st.empty()
+            if start_button:
+                st.session_state.niche_processing = True
+                st.session_state.niche_cancel_requested = False
 
-                results = []
-                for i, (name, content) in enumerate(companies):
-                    status.text(f"Processing {i+1}/{len(companies)}: {name[:30]}...")
+                # Save file for processing
+                input_path = save_uploaded_file(uploaded_file)
+                if uploaded_file.name.endswith('.csv'):
+                    df = pd.read_csv(input_path)
+                else:
+                    df = pd.read_excel(input_path)
 
-                    try:
-                        result = categorize_niche(content, name)
-                        results.append({
-                            "company_name": name,
-                            "niche": result.niche,
-                            "confidence": result.confidence,
-                            "reasoning": result.reasoning
-                        })
-                    except Exception as e:
-                        results.append({
-                            "company_name": name,
-                            "niche": "Error",
-                            "confidence": "Low",
-                            "reasoning": str(e)
-                        })
+                try:
+                    from categorize_company_niche import categorize_niche, categorize_niche_batch
 
-                    progress.progress((i + 1) / len(companies))
+                    # Prepare companies list
+                    companies = []
+                    for _, row in df.iterrows():
+                        name = str(row.get(name_col, "")).strip()
+                        if content_col and content_col != "(Use company name only)" and content_col in df.columns:
+                            content = str(row.get(content_col, "")).strip()
+                        else:
+                            content = name
+                        companies.append({"name": name, "content": content})
 
-                    # Small delay to avoid rate limits
-                    time.sleep(0.5)
+                    total = len(companies)
+                    st.info(f"Processing {total:,} companies...")
 
-                # Add to dataframe
-                df["Verified_Niche"] = [r["niche"] for r in results]
-                df["Niche_Confidence"] = [r["confidence"] for r in results]
-                df["Niche_Reasoning"] = [r["reasoning"] for r in results]
+                    # Progress tracking
+                    progress_bar = st.progress(0)
+                    status_text = st.empty()
+                    eta_text = st.empty()
 
-                st.success(f"Categorized {len(results)} companies!")
+                    results = []
+                    start_time = time.time()
 
-                # Show summary
-                from collections import Counter
-                niche_counts = Counter(r["niche"] for r in results)
-                st.markdown("### Top Niches Found")
-                niche_df = pd.DataFrame([
-                    {"Niche": n, "Count": c}
-                    for n, c in niche_counts.most_common(10)
-                ])
-                st.dataframe(niche_df)
+                    if use_batching:
+                        # Batch mode
+                        num_batches = (total + batch_size - 1) // batch_size
 
-                # Preview
-                with st.expander("View Results"):
-                    st.dataframe(df[[name_col, "Verified_Niche", "Niche_Confidence"]].head(50))
+                        for batch_idx in range(num_batches):
+                            # Check for cancellation
+                            if st.session_state.niche_cancel_requested:
+                                st.warning(f"Cancelled after {len(results)} companies.")
+                                break
 
-                # Download
-                output_path = input_path.replace(".xlsx", "_niches.xlsx").replace(".xls", "_niches.xls")
-                df.to_excel(output_path, index=False)
+                            batch_start = batch_idx * batch_size
+                            batch_end = min(batch_start + batch_size, total)
+                            batch = companies[batch_start:batch_end]
 
-                with open(output_path, "rb") as f:
-                    st.download_button(
-                        "📥 Download Results (Excel)",
-                        f,
-                        file_name=os.path.basename(output_path),
-                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                    )
+                            status_text.text(f"Batch {batch_idx + 1}/{num_batches} | Processing {batch_start + 1}-{batch_end} of {total:,}")
 
-            except Exception as e:
-                st.error(f"Error: {str(e)}")
-                import traceback
-                st.code(traceback.format_exc())
+                            batch_results = categorize_niche_batch(
+                                batch,
+                                predefined_niches=predefined_niches,
+                                batch_size=batch_size
+                            )
+                            results.extend(batch_results)
+
+                            # Update progress
+                            progress = len(results) / total
+                            progress_bar.progress(progress)
+
+                            # Calculate ETA
+                            elapsed = time.time() - start_time
+                            if len(results) > 0:
+                                rate = len(results) / elapsed
+                                remaining = total - len(results)
+                                eta_seconds = remaining / rate if rate > 0 else 0
+                                eta_text.text(f"⏱️ {int(progress * 100)}% | ~{int(eta_seconds // 60)}m {int(eta_seconds % 60)}s remaining")
+
+                    else:
+                        # Single mode (more accurate)
+                        for i, company in enumerate(companies):
+                            if st.session_state.niche_cancel_requested:
+                                st.warning(f"Cancelled after {len(results)} companies.")
+                                break
+
+                            status_text.text(f"Processing {i + 1}/{total}: {company['name'][:40]}...")
+
+                            if predefined_niches:
+                                batch_results = categorize_niche_batch(
+                                    [company],
+                                    predefined_niches=predefined_niches,
+                                    batch_size=1
+                                )
+                                if batch_results:
+                                    results.append(batch_results[0])
+                            else:
+                                result = categorize_niche(company['content'], company['name'])
+                                results.append({
+                                    "index": i,
+                                    "company": company['name'],
+                                    "niche": result.niche,
+                                    "match_type": "single",
+                                    "confidence": result.confidence
+                                })
+
+                            progress_bar.progress((i + 1) / total)
+
+                            # ETA calculation
+                            elapsed = time.time() - start_time
+                            rate = (i + 1) / elapsed
+                            remaining = total - (i + 1)
+                            eta_seconds = remaining / rate if rate > 0 else 0
+                            eta_text.text(f"⏱️ {int((i + 1) / total * 100)}% | ~{int(eta_seconds // 60)}m {int(eta_seconds % 60)}s remaining")
+
+                            time.sleep(0.3)  # Small delay for rate limits
+
+                    # Processing complete
+                    st.session_state.niche_processing = False
+                    status_text.empty()
+                    eta_text.empty()
+
+                    if results:
+                        # Add results to dataframe
+                        # Create a mapping from index to result
+                        result_map = {r.get("index", i): r for i, r in enumerate(results)}
+
+                        niches = []
+                        match_types = []
+                        for i in range(len(df)):
+                            r = result_map.get(i, {"niche": "Not processed", "match_type": "skipped"})
+                            niches.append(r.get("niche", "Unknown"))
+                            match_types.append(r.get("match_type", "unknown"))
+
+                        df["AI_Niche"] = niches
+                        df["Match_Type"] = match_types
+
+                        st.success(f"✅ Categorized {len(results):,} companies!")
+
+                        # Show summary
+                        from collections import Counter
+                        niche_counts = Counter(r.get("niche", "Unknown") for r in results)
+
+                        st.markdown("### 📊 Niche Distribution")
+                        summary_data = []
+                        for niche, count in niche_counts.most_common(20):
+                            pct = count / len(results) * 100
+                            summary_data.append({"Niche": niche, "Count": count, "Percentage": f"{pct:.1f}%"})
+
+                        summary_df = pd.DataFrame(summary_data)
+                        st.dataframe(summary_df, use_container_width=True)
+
+                        # Show match type breakdown
+                        if predefined_niches:
+                            match_counts = Counter(r.get("match_type", "unknown") for r in results)
+                            st.markdown("### Match Type Breakdown")
+                            match_data = [{"Type": t, "Count": c} for t, c in match_counts.items()]
+                            st.dataframe(pd.DataFrame(match_data))
+
+                        # Preview results
+                        with st.expander("📋 View Results (first 100 rows)"):
+                            preview_cols = [name_col, "AI_Niche", "Match_Type"]
+                            if content_col and content_col != "(Use company name only)" and content_col in df.columns:
+                                preview_cols.insert(1, content_col)
+                            st.dataframe(df[preview_cols].head(100))
+
+                        # Download
+                        output_path = input_path.replace(".xlsx", "_niches.xlsx").replace(".xls", "_niches.xlsx").replace(".csv", "_niches.xlsx")
+                        df.to_excel(output_path, index=False)
+
+                        with open(output_path, "rb") as f:
+                            st.download_button(
+                                "📥 Download Results (Excel)",
+                                f,
+                                file_name=os.path.basename(output_path),
+                                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                            )
+
+                except Exception as e:
+                    st.session_state.niche_processing = False
+                    st.error(f"Error: {str(e)}")
+                    import traceback
+                    st.code(traceback.format_exc())
+
+        except Exception as e:
+            st.error(f"Error loading file: {str(e)}")
 
 
 # ============== MAIN ==============
