@@ -1,0 +1,7 @@
+{
+  "smartlead-intake": {
+    "directive": "directives/smartlead_to_clickup.md",
+    "description": "Create ClickUp task when Smartlead lead status is interested/meeting request",
+    "allowed_tools": ["create_clickup_task"]
+  }
+}

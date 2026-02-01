@@ -1,0 +1,191 @@
+{
+  "title": "Seven Gravity Cold Email Sequences",
+  "version": "1.0.0",
+  "description": "3-email sequences with 3 variants each for A/B testing. 10-15 qualified leads in 60 days offer.",
+  "structure": {
+    "emails_per_sequence": 3,
+    "variants_per_email": 3,
+    "total_columns": 18,
+    "timing": {
+      "email1": "Day 0 - Initial outreach",
+      "email2": "Day 3-5 - Follow-up (value-add or hammer angle)",
+      "email3": "Day 7-10 - Breakup (get response)"
+    }
+  },
+  "cta_rules": {
+    "allowed": ["video", "info", "case study", "examples", "breakdown"],
+    "forbidden": ["call", "coffee", "meeting", "calendar", "zoom", "close file"]
+  },
+  "placeholders": {
+    "first_name": "Prospect first name",
+    "company_name": "Prospect company name (preferably cleaned)",
+    "niche": "Industry/vertical from categorization"
+  },
+  "sequences": [
+    {
+      "id": "SG-MARKETING-001",
+      "industry": ["Marketing", "Advertising", "PR", "Agency"],
+      "email1": {
+        "variant_a": {
+          "subject": "10-15 qualified {niche} leads in 60 days",
+          "body": "Hey {first_name},\n\nMost {niche} teams struggle to get consistent, qualified pipeline.\n\nWe help {niche} companies like {company_name} generate 10-15 qualified leads in 60 days that actually fit your ICP.\n\nWe just helped a team triple their pipeline with leads that convert.\n\nMind if I share a quick video showing how it works?",
+          "word_count": 54
+        },
+        "variant_b": {
+          "subject": "Quick question about {company_name}'s pipeline",
+          "body": "Hey {first_name},\n\nAre you currently hitting your lead targets for {company_name}?\n\nWe specialize in generating 10-15 qualified {niche} leads per month that match your ICP. No time wasters—just prospects ready to convert.\n\nRecent client went from 3 qualified leads/month to 15 in under 60 days.\n\nCan I send a breakdown of how we do it?",
+          "word_count": 59
+        },
+        "variant_c": {
+          "subject": "Saw {company_name} and had an idea",
+          "body": "Hey {first_name},\n\nNoticed {company_name} is in the {niche} space. Quick question—how's your lead quality right now?\n\nWe help {niche} businesses generate 10-15 ICP-fit leads in 60 days. No fluff, just qualified prospects.\n\nShould I send over a video showing our process?",
+          "word_count": 46
+        }
+      },
+      "email2": {
+        "variant_a": {
+          "subject": "Re: 10-15 qualified {niche} leads in 60 days",
+          "body": "Hey {first_name},\n\nFollowing up on my last email about generating qualified pipeline for {company_name}.\n\nWe recently helped a {niche} company go from 2-3 leads/month to 15 qualified opportunities in 8 weeks. Their close rate doubled because the leads actually fit their ICP.\n\nI recorded a 2-minute video breaking down the exact process.\n\nMind if I share it?",
+          "word_count": 58
+        },
+        "variant_b": {
+          "subject": "Example for {company_name}",
+          "body": "Hey {first_name},\n\nSince you didn't reply, I figured I'd add context.\n\nHere's what we typically see: {niche} teams waste time on unqualified leads that go nowhere. We fix that by targeting prospects who match your ICP from day one.\n\n10-15 qualified leads in 60 days, every time.\n\nWant to see examples from companies like yours?",
+          "word_count": 56
+        },
+        "variant_c": {
+          "subject": "Re: Quick question about {company_name}'s pipeline",
+          "body": "Hey {first_name},\n\nStill curious if you're open to hitting 10-15 qualified leads per month.\n\nWe just wrapped a project where a {niche} team went from chasing cold leads to having qualified prospects reach out daily. Revenue jumped 40% in 90 days.\n\nI put together a quick video showing how.\n\nMind if I send it over?",
+          "word_count": 59
+        }
+      },
+      "email3": {
+        "variant_a": {
+          "subject": "Last attempt - {company_name}",
+          "body": "Hey {first_name},\n\nI'll keep this short. If you're not interested in 10-15 qualified {niche} leads per month, that's totally fine—just let me know so I stop bothering you.\n\nBut if timing's just off, I'm happy to circle back in Q2.\n\nMind if I share a quick breakdown of how we can achieve this for {company_name}?",
+          "word_count": 56
+        },
+        "variant_b": {
+          "subject": "Should I stop emailing?",
+          "body": "Hey {first_name},\n\nI've reached out twice about helping {company_name} generate qualified pipeline, but haven't heard back.\n\nIf it's a no, just reply 'not interested' and I'll leave you alone.\n\nIf it's a maybe, reply 'later' and I'll check back in a few months.\n\nWhat's your take?",
+          "word_count": 49
+        },
+        "variant_c": {
+          "subject": "Yes or no?",
+          "body": "Hey {first_name},\n\nLast email. Is getting 10-15 qualified {niche} leads per month something {company_name} needs?\n\nIf yes—let's talk.\nIf no—just say so and I'll stop.\n\nI'd rather hear 'not interested' than keep guessing.\n\nWhat do you say?",
+          "word_count": 44
+        }
+      }
+    },
+    {
+      "id": "SG-SAAS-001",
+      "industry": ["SaaS", "B2B SaaS", "Software", "Technology"],
+      "email1": {
+        "variant_a": {
+          "subject": "Pipeline issue at {company_name}?",
+          "body": "Hey {first_name},\n\nMost {niche} teams struggle with inconsistent pipeline and unqualified demos.\n\nWe help {niche} companies generate 10-15 ICP-fit leads in 60 days. No tire kickers—just prospects who match your buyer profile.\n\nA similar SaaS went from 4 demos/month to 18 qualified opportunities.\n\nCan I share a video showing the process?",
+          "word_count": 54
+        },
+        "variant_b": {
+          "subject": "Quick question",
+          "body": "Hey {first_name},\n\nHow's your lead quality at {company_name}? Getting enough qualified demos?\n\nWe specialize in helping {niche} teams generate 10-15 leads per month that actually convert. No time wasters.\n\nRecent client increased SQL velocity by 3x in 60 days.\n\nMind if I send a breakdown?",
+          "word_count": 48
+        },
+        "variant_c": {
+          "subject": "10-15 qualified leads for {company_name}",
+          "body": "Hey {first_name},\n\nNoticed {company_name} is in the {niche} space.\n\nWe help SaaS teams generate 10-15 qualified leads per month that fit your ICP. No fluff demos—just prospects ready to buy.\n\nShould I send a quick video showing how?",
+          "word_count": 42
+        }
+      },
+      "email2": {
+        "variant_a": {
+          "subject": "Re: Pipeline issue at {company_name}?",
+          "body": "Hey {first_name},\n\nFollowing up on qualified pipeline for {company_name}.\n\nWe recently helped a {niche} company go from 3 qualified demos/month to 15 in under 8 weeks. Their win rate jumped because leads actually matched their ICP.\n\nI recorded a 2-minute video breaking down the exact approach.\n\nMind if I share it?",
+          "word_count": 54
+        },
+        "variant_b": {
+          "subject": "Case study for {company_name}",
+          "body": "Hey {first_name},\n\nSince you didn't reply, here's context.\n\nMost {niche} teams waste cycles on unqualified demos. We fix that by targeting only ICP-fit prospects from day one.\n\n10-15 qualified leads in 60 days, consistently.\n\nWant to see examples from companies like yours?",
+          "word_count": 45
+        },
+        "variant_c": {
+          "subject": "Re: Quick question",
+          "body": "Hey {first_name},\n\nStill curious if you're open to 10-15 qualified demos per month.\n\nWe just wrapped a project where a {niche} team went from chasing tire kickers to qualified pipeline daily. ARR grew 45% in 90 days.\n\nI put together a quick video.\n\nMind if I send it?",
+          "word_count": 51
+        }
+      },
+      "email3": {
+        "variant_a": {
+          "subject": "Final email - {company_name}",
+          "body": "Hey {first_name},\n\nI'll make this quick. If you're not interested in 10-15 qualified {niche} demos per month, no worries—just let me know.\n\nIf timing's off, I can circle back later.\n\nMind if I share a quick breakdown of how we can achieve this for {company_name}?",
+          "word_count": 47
+        },
+        "variant_b": {
+          "subject": "Should I keep trying?",
+          "body": "Hey {first_name},\n\nI've reached out twice about helping {company_name} generate qualified pipeline, but haven't heard back.\n\nIf it's a no, just say so.\nIf it's a later, tell me when.\n\nMind if I share a quick breakdown of how we can achieve this for {company_name}?",
+          "word_count": 48
+        },
+        "variant_c": {
+          "subject": "Yes, no, or maybe?",
+          "body": "Hey {first_name},\n\nLast attempt. Is getting 10-15 qualified {niche} leads per month valuable to {company_name}?\n\nYes—let's talk.\nNo—I'll stop.\nMaybe—tell me when.\n\nWhat's your answer?",
+          "word_count": 33
+        }
+      }
+    },
+    {
+      "id": "SG-GENERIC-001",
+      "industry": ["Generic"],
+      "email1": {
+        "variant_a": {
+          "subject": "Qualified leads for {company_name}",
+          "body": "Hey {first_name},\n\nMost {niche} companies struggle with inconsistent, low-quality pipeline.\n\nWe help businesses like {company_name} generate 10-15 qualified leads in 60 days that actually fit your ICP.\n\nRecent client tripled their pipeline with leads that convert.\n\nMind if I share a quick video showing how?",
+          "word_count": 48
+        },
+        "variant_b": {
+          "subject": "Quick question",
+          "body": "Hey {first_name},\n\nHow's your lead quality at {company_name} right now?\n\nWe specialize in generating 10-15 qualified {niche} leads per month that match your ICP. No time wasters—just prospects ready to convert.\n\nCan I send a breakdown of how we do it?",
+          "word_count": 44
+        },
+        "variant_c": {
+          "subject": "Saw {company_name}",
+          "body": "Hey {first_name},\n\nNoticed {company_name} is in the {niche} space.\n\nWe help businesses generate 10-15 ICP-fit leads in 60 days. No fluff, just qualified prospects.\n\nShould I send over a video showing the process?",
+          "word_count": 37
+        }
+      },
+      "email2": {
+        "variant_a": {
+          "subject": "Re: Qualified leads for {company_name}",
+          "body": "Hey {first_name},\n\nFollowing up on qualified pipeline for {company_name}.\n\nWe recently helped a {niche} company go from 2-3 leads/month to 15 qualified opportunities in 8 weeks. Close rate doubled.\n\nI recorded a 2-minute video breaking it down.\n\nMind if I share it?",
+          "word_count": 45
+        },
+        "variant_b": {
+          "subject": "Example for {company_name}",
+          "body": "Hey {first_name},\n\nSince you didn't reply, here's context.\n\n{niche} teams often waste time on unqualified leads. We fix that by targeting ICP-fit prospects from day one.\n\n10-15 qualified leads in 60 days.\n\nWant to see examples?",
+          "word_count": 39
+        },
+        "variant_c": {
+          "subject": "Re: Quick question",
+          "body": "Hey {first_name},\n\nStill curious if you're open to 10-15 qualified leads per month.\n\nWe just helped a {niche} company go from chasing cold leads to qualified pipeline daily. Revenue jumped 40%.\n\nI made a quick video.\n\nMind if I send it?",
+          "word_count": 45
+        }
+      },
+      "email3": {
+        "variant_a": {
+          "subject": "Last email - {company_name}",
+          "body": "Hey {first_name},\n\nIf you're not interested in 10-15 qualified {niche} leads per month, no problem—just let me know.\n\nIf timing's off, I can reach back out later.\n\nMind if I share a quick breakdown of how we can achieve this for {company_name}?",
+          "word_count": 43
+        },
+        "variant_b": {
+          "subject": "Should I stop?",
+          "body": "Hey {first_name},\n\nI've reached out twice about qualified pipeline for {company_name}, but haven't heard back.\n\nIf it's a no, just say so.\nIf it's a later, tell me when.\n\nWhat do you think?",
+          "word_count": 38
+        },
+        "variant_c": {
+          "subject": "Yes or no?",
+          "body": "Hey {first_name},\n\nLast attempt. Is getting 10-15 qualified {niche} leads per month something {company_name} needs?\n\nYes—let's talk.\nNo—I'll stop.\nMaybe—tell me when.\n\nYour take?",
+          "word_count": 31
+        }
+      }
+    }
+  ]
+}

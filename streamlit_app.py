@@ -1401,16 +1401,15 @@ def page_categorize_niche():
                             match_data = [{"Type": t, "Count": c} for t, c in match_counts.items()]
                             st.dataframe(pd.DataFrame(match_data))
 
-                        # Preview results
+                        # Preview results - show ALL columns (original + new)
                         with st.expander("📋 View Results (first 100 rows)"):
-                            preview_cols = [name_col, "AI_Niche", "Match_Type"]
-                            if content_col and content_col != "(Use company name only)" and content_col in df.columns:
-                                preview_cols.insert(1, content_col)
-                            st.dataframe(df[preview_cols].head(100))
+                            st.dataframe(df.head(100), use_container_width=True)
 
-                        # Download
-                        output_path = input_path.replace(".xlsx", "_niches.xlsx").replace(".xls", "_niches.xlsx").replace(".csv", "_niches.xlsx")
-                        df.to_excel(output_path, index=False)
+                        # Download - properly handle file extension
+                        import os.path
+                        base_name, ext = os.path.splitext(input_path)
+                        output_path = f"{base_name}_niches.xlsx"
+                        df.to_excel(output_path, index=False, engine='openpyxl')
 
                         with open(output_path, "rb") as f:
                             st.download_button(
