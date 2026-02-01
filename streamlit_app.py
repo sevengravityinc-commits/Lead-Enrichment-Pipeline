@@ -1311,6 +1311,9 @@ def page_categorize_niche():
                                 predefined_niches=predefined_niches,
                                 batch_size=batch_size
                             )
+                            # Adjust indices to global position
+                            for r in batch_results:
+                                r["index"] = batch_start + r.get("index", 0)
                             results.extend(batch_results)
 
                             # Update progress
