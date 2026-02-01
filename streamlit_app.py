@@ -720,11 +720,22 @@ def page_bulk_dm_lookup():
                         col2.metric("DMs Found", result.get('decision_makers_found', 0))
                         col3.metric("Credits Used", f"{result.get('credits_used', 'N/A')}")
 
-                        # Download button
+                        # Display results table
                         if result.get('output_file'):
+                            import pandas as pd
+                            df = pd.read_excel(result['output_file'])
+
+                            if not df.empty:
+                                st.markdown("### Decision Makers Found")
+                                # Select key columns to display
+                                display_cols = ['Company Name', 'Company Domain', 'Full Name', 'Title', 'Email', 'LinkedIn URL']
+                                display_cols = [c for c in display_cols if c in df.columns]
+                                st.dataframe(df[display_cols], use_container_width=True, hide_index=True)
+
+                            # Download button
                             with open(result['output_file'], "rb") as f:
                                 st.download_button(
-                                    "📥 Download Results",
+                                    "📥 Download Full Results (Excel)",
                                     f,
                                     file_name=Path(result['output_file']).name,
                                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
