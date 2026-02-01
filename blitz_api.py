@@ -91,6 +91,14 @@ class EmailResult:
 
 
 @dataclass
+class PhoneResult:
+    """Result from phone enrichment"""
+    found: bool
+    phone: Optional[str] = None
+    phone_type: Optional[str] = None  # mobile, direct, etc.
+
+
+@dataclass
 class CompanyResult:
     """Result from company enrichment"""
     found: bool
@@ -338,6 +346,32 @@ class BlitzAPI:
             email=response.get("email"),
             all_emails=response.get("all_emails", [])
         )
+
+    def find_phone(self, person_linkedin_url: str) -> PhoneResult:
+        """
+        Find mobile or direct phone number for a LinkedIn profile.
+
+        Args:
+            person_linkedin_url: LinkedIn profile URL
+
+        Returns:
+            PhoneResult with found status and phone number
+
+        Cost: 5 credits (on success)
+        """
+        data = {"person_linkedin_url": person_linkedin_url}
+
+        try:
+            response = self._request("POST", "/v2/enrichment/phone", data)
+
+            return PhoneResult(
+                found=response.get("found", False),
+                phone=response.get("phone") or response.get("phone_number"),
+                phone_type=response.get("phone_type") or response.get("type")
+            )
+        except BlitzAPIError as e:
+            # Phone endpoint might not exist or have different structure
+            return PhoneResult(found=False, phone=None, phone_type=None)
 
     # ==================== Company Enrichment ====================
 
