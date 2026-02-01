@@ -1344,6 +1344,8 @@ def page_categorize_niche():
                                     batch_size=1
                                 )
                                 if batch_results:
+                                    # Set correct global index
+                                    batch_results[0]["index"] = i
                                     results.append(batch_results[0])
                             else:
                                 result = categorize_niche(company['content'], company['name'])
