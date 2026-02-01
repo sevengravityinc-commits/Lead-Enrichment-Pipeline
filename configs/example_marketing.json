@@ -1,0 +1,93 @@
+{
+  "campaign_id": "sg-marketing-agencies-q1-2026",
+  "campaign_name": "Marketing Agencies Q1 2026",
+  "description": "Targeting marketing and digital agencies for lead gen services",
+
+  "classifiers": {
+    "company_filter": {
+      "enabled": true,
+      "exclude_types": ["staffing_agency", "recruiting_firm", "temp_agency"],
+      "exclude_keywords": ["staffing", "recruitment", "headhunter", "temp", "contractor"],
+      "competitor_domains": []
+    },
+    "icp_scorer": {
+      "enabled": true,
+      "min_score_threshold": 60,
+      "criteria": {
+        "employee_range": {
+          "min": 10,
+          "max": 200,
+          "weight": 25
+        },
+        "industries": {
+          "included": [
+            "Marketing",
+            "Advertising",
+            "Digital Marketing",
+            "Creative Agency",
+            "PR Agency",
+            "Media Agency",
+            "Branding Agency"
+          ],
+          "excluded": [
+            "Government",
+            "Non-profit",
+            "Education"
+          ],
+          "weight": 30
+        },
+        "geo": {
+          "countries": ["US", "UK", "CA", "AU"],
+          "weight": 15
+        },
+        "revenue_range": {
+          "min": "500K",
+          "max": "50M",
+          "weight": 20
+        }
+      }
+    },
+    "intent_signals": {
+      "enabled": false
+    }
+  },
+
+  "target_roles": {
+    "seniority_priority": ["vp", "c_suite", "director", "head"],
+    "functions": ["sales", "marketing", "growth", "business_development"],
+    "custom_titles": ["Founder", "Partner", "Managing Director", "Principal"],
+    "exclude_titles": ["Assistant", "Coordinator", "Intern", "Student", "Junior"],
+    "contacts_by_company_size": {
+      "small": { "max_employees": 20, "contacts": 2 },
+      "medium": { "max_employees": 100, "contacts": 3 },
+      "large": { "min_employees": 100, "contacts": 4 }
+    }
+  },
+
+  "enrichment": {
+    "blitz_api": {
+      "enabled": true,
+      "find_decision_makers": true,
+      "enrich_emails": true,
+      "verify_employment": false
+    },
+    "existing_verification": {
+      "use_million_verifier": true,
+      "use_bounce_ban": true
+    }
+  },
+
+  "output": {
+    "format": "excel",
+    "sheet_name": "Marketing Agencies TAM Q1 2026",
+    "min_quality_score": 50,
+    "include_reasoning": false,
+    "smartlead_ready": true
+  },
+
+  "deduplication": {
+    "company_fuzzy_threshold": 0.85,
+    "check_previous_campaigns": true,
+    "previous_contact_days": 90
+  }
+}

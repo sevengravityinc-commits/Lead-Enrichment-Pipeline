@@ -1,0 +1,148 @@
+{
+  "description": "Default role mappings for decision-maker targeting",
+
+  "role_priority": {
+    "vp": {
+      "priority": 1,
+      "titles": [
+        "VP Sales",
+        "VP Business Development",
+        "VP Growth",
+        "VP Marketing",
+        "VP Revenue",
+        "VP Partnerships",
+        "Vice President Sales",
+        "Vice President Marketing",
+        "Vice President Business Development",
+        "Vice President Growth"
+      ]
+    },
+    "c_suite": {
+      "priority": 2,
+      "titles": [
+        "CEO",
+        "Founder",
+        "Co-Founder",
+        "President",
+        "Owner"
+      ]
+    },
+    "revenue_leaders": {
+      "priority": 3,
+      "titles": [
+        "CMO",
+        "CRO",
+        "Chief Marketing Officer",
+        "Chief Revenue Officer",
+        "Chief Growth Officer",
+        "Chief Commercial Officer"
+      ]
+    },
+    "director": {
+      "priority": 4,
+      "titles": [
+        "Director of Sales",
+        "Director of Marketing",
+        "Director of Growth",
+        "Director of Business Development",
+        "Director of Partnerships",
+        "Head of Sales",
+        "Head of Marketing",
+        "Head of Growth",
+        "Head of Business Development"
+      ]
+    }
+  },
+
+  "skip_roles": {
+    "titles": [
+      "CFO",
+      "COO",
+      "Chief Financial Officer",
+      "Chief Operating Officer",
+      "CTO",
+      "Chief Technology Officer",
+      "VP Engineering",
+      "VP Finance",
+      "VP Operations"
+    ],
+    "reason": "Not typically involved in buying decisions for sales/marketing services"
+  },
+
+  "exclude_titles": [
+    "Assistant",
+    "Coordinator",
+    "Intern",
+    "Student",
+    "Junior",
+    "Associate",
+    "Analyst",
+    "Specialist",
+    "Support"
+  ],
+
+  "niche_overrides": {
+    "agencies": {
+      "additional_titles": ["Partner", "Managing Director", "Principal", "Managing Partner"],
+      "note": "Agencies often use Partner instead of VP/Director"
+    },
+    "finance": {
+      "additional_titles": ["Managing Director", "Partner", "Principal", "Portfolio Manager"],
+      "note": "Finance uses MD/Partner titles"
+    },
+    "consulting": {
+      "additional_titles": ["Partner", "Principal", "Managing Consultant", "Practice Lead"],
+      "note": "Consulting firms use Partner/Principal"
+    },
+    "legal": {
+      "additional_titles": ["Partner", "Managing Partner", "Of Counsel", "General Counsel"],
+      "note": "Law firms use Partner structure"
+    }
+  },
+
+  "company_size_adjustments": {
+    "small": {
+      "max_employees": 20,
+      "contacts_target": 2,
+      "accept_manager": true,
+      "note": "In small companies, Manager can be decision-maker"
+    },
+    "medium": {
+      "max_employees": 100,
+      "contacts_target": 3,
+      "accept_manager": false,
+      "note": "Standard targeting"
+    },
+    "large": {
+      "min_employees": 100,
+      "contacts_target": 4,
+      "accept_manager": false,
+      "require_vp_plus": true,
+      "note": "Large companies need VP+ for buying authority"
+    }
+  },
+
+  "confidence_by_company_size": {
+    "small": {
+      "CEO": "HIGHEST",
+      "Founder": "HIGHEST",
+      "Manager": "MEDIUM",
+      "Director": "HIGH",
+      "VP": "HIGH"
+    },
+    "medium": {
+      "CEO": "HIGHEST",
+      "Founder": "HIGHEST",
+      "Manager": "LOW",
+      "Director": "MEDIUM",
+      "VP": "HIGH"
+    },
+    "large": {
+      "CEO": "MEDIUM",
+      "Founder": "MEDIUM",
+      "Manager": "LOW",
+      "Director": "LOW",
+      "VP": "HIGH"
+    }
+  }
+}

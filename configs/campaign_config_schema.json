@@ -1,0 +1,261 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Lead Qualification Campaign Config",
+  "description": "Configuration for lead qualification campaigns",
+  "type": "object",
+  "required": ["campaign_id", "campaign_name"],
+  "properties": {
+    "campaign_id": {
+      "type": "string",
+      "description": "Unique identifier for this campaign",
+      "pattern": "^[a-z0-9-]+$"
+    },
+    "campaign_name": {
+      "type": "string",
+      "description": "Human-readable campaign name"
+    },
+    "description": {
+      "type": "string",
+      "description": "Optional campaign description"
+    },
+    "classifiers": {
+      "type": "object",
+      "description": "Enable/disable classification modules",
+      "properties": {
+        "company_filter": {
+          "type": "object",
+          "properties": {
+            "enabled": { "type": "boolean", "default": true },
+            "exclude_types": {
+              "type": "array",
+              "items": { "type": "string" },
+              "description": "Company types to exclude",
+              "examples": [["staffing_agency", "consulting_firm", "competitor"]]
+            },
+            "exclude_keywords": {
+              "type": "array",
+              "items": { "type": "string" },
+              "description": "Keywords in company name/description to exclude"
+            },
+            "competitor_domains": {
+              "type": "array",
+              "items": { "type": "string" },
+              "description": "Domains of competitors to exclude"
+            }
+          }
+        },
+        "icp_scorer": {
+          "type": "object",
+          "properties": {
+            "enabled": { "type": "boolean", "default": true },
+            "min_score_threshold": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100,
+              "default": 60,
+              "description": "Minimum ICP score to include (0-100)"
+            },
+            "criteria": {
+              "type": "object",
+              "properties": {
+                "employee_range": {
+                  "type": "object",
+                  "properties": {
+                    "min": { "type": "number", "minimum": 1 },
+                    "max": { "type": "number" },
+                    "weight": { "type": "number", "minimum": 0, "maximum": 100, "default": 25 }
+                  }
+                },
+                "industries": {
+                  "type": "object",
+                  "properties": {
+                    "included": {
+                      "type": "array",
+                      "items": { "type": "string" },
+                      "description": "Industries to target"
+                    },
+                    "excluded": {
+                      "type": "array",
+                      "items": { "type": "string" },
+                      "description": "Industries to exclude"
+                    },
+                    "weight": { "type": "number", "minimum": 0, "maximum": 100, "default": 30 }
+                  }
+                },
+                "geo": {
+                  "type": "object",
+                  "properties": {
+                    "countries": {
+                      "type": "array",
+                      "items": { "type": "string" },
+                      "description": "Country codes to target (e.g., US, UK, CA)"
+                    },
+                    "exclude_countries": {
+                      "type": "array",
+                      "items": { "type": "string" }
+                    },
+                    "weight": { "type": "number", "minimum": 0, "maximum": 100, "default": 15 }
+                  }
+                },
+                "revenue_range": {
+                  "type": "object",
+                  "properties": {
+                    "min": { "type": "string", "description": "Minimum revenue (e.g., '1M', '10M')" },
+                    "max": { "type": "string", "description": "Maximum revenue (e.g., '50M', '100M')" },
+                    "weight": { "type": "number", "minimum": 0, "maximum": 100, "default": 20 }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "intent_signals": {
+          "type": "object",
+          "properties": {
+            "enabled": { "type": "boolean", "default": false },
+            "signals": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": ["funding", "hiring", "linkedin_activity", "tech_adoption"]
+              }
+            },
+            "min_score": { "type": "number", "minimum": 0, "maximum": 100 }
+          }
+        }
+      }
+    },
+    "target_roles": {
+      "type": "object",
+      "description": "Decision-maker targeting configuration",
+      "properties": {
+        "seniority_priority": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": ["vp", "c_suite", "director", "head"],
+          "description": "Priority order for seniority levels"
+        },
+        "functions": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": ["sales", "marketing", "growth", "business_development"],
+          "description": "Job functions to target"
+        },
+        "custom_titles": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Additional specific titles to include"
+        },
+        "exclude_titles": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": ["Assistant", "Coordinator", "Intern", "Student"],
+          "description": "Titles to exclude"
+        },
+        "contacts_by_company_size": {
+          "type": "object",
+          "description": "Number of contacts to find based on company size",
+          "properties": {
+            "small": {
+              "type": "object",
+              "properties": {
+                "max_employees": { "type": "number", "default": 20 },
+                "contacts": { "type": "number", "default": 2 }
+              }
+            },
+            "medium": {
+              "type": "object",
+              "properties": {
+                "max_employees": { "type": "number", "default": 100 },
+                "contacts": { "type": "number", "default": 3 }
+              }
+            },
+            "large": {
+              "type": "object",
+              "properties": {
+                "min_employees": { "type": "number", "default": 100 },
+                "contacts": { "type": "number", "default": 4 }
+              }
+            }
+          }
+        }
+      }
+    },
+    "enrichment": {
+      "type": "object",
+      "description": "Data enrichment settings",
+      "properties": {
+        "blitz_api": {
+          "type": "object",
+          "properties": {
+            "enabled": { "type": "boolean", "default": true },
+            "find_decision_makers": { "type": "boolean", "default": true },
+            "enrich_emails": { "type": "boolean", "default": true },
+            "verify_employment": { "type": "boolean", "default": false }
+          }
+        },
+        "existing_verification": {
+          "type": "object",
+          "properties": {
+            "use_million_verifier": { "type": "boolean", "default": true },
+            "use_bounce_ban": { "type": "boolean", "default": true }
+          }
+        }
+      }
+    },
+    "output": {
+      "type": "object",
+      "description": "Output configuration",
+      "properties": {
+        "format": {
+          "type": "string",
+          "enum": ["google_sheets", "excel", "csv", "json"],
+          "default": "google_sheets"
+        },
+        "sheet_name": {
+          "type": "string",
+          "description": "Name for output Google Sheet"
+        },
+        "min_quality_score": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100,
+          "default": 50,
+          "description": "Minimum unified quality score to include"
+        },
+        "include_reasoning": {
+          "type": "boolean",
+          "default": false,
+          "description": "Include AI reasoning columns in output"
+        },
+        "smartlead_ready": {
+          "type": "boolean",
+          "default": true,
+          "description": "Format output for SmartLead upload"
+        }
+      }
+    },
+    "deduplication": {
+      "type": "object",
+      "properties": {
+        "company_fuzzy_threshold": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "default": 0.85,
+          "description": "Fuzzy match threshold for company names (0-1)"
+        },
+        "check_previous_campaigns": {
+          "type": "boolean",
+          "default": true,
+          "description": "Check against previously contacted companies"
+        },
+        "previous_contact_days": {
+          "type": "number",
+          "default": 90,
+          "description": "Days since last contact to consider duplicate"
+        }
+      }
+    }
+  }
+}

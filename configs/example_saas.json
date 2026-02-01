@@ -1,0 +1,97 @@
+{
+  "campaign_id": "sg-saas-companies-q1-2026",
+  "campaign_name": "SaaS Companies Q1 2026",
+  "description": "Targeting B2B SaaS companies for growth services",
+
+  "classifiers": {
+    "company_filter": {
+      "enabled": true,
+      "exclude_types": ["consulting_firm", "staffing_agency", "enterprise_software"],
+      "exclude_keywords": ["consulting", "staffing", "enterprise", "on-premise"],
+      "competitor_domains": []
+    },
+    "icp_scorer": {
+      "enabled": true,
+      "min_score_threshold": 60,
+      "criteria": {
+        "employee_range": {
+          "min": 20,
+          "max": 500,
+          "weight": 25
+        },
+        "industries": {
+          "included": [
+            "SaaS",
+            "Software",
+            "Technology",
+            "B2B Software",
+            "Cloud Computing",
+            "Enterprise Software",
+            "Fintech",
+            "Healthtech",
+            "Martech"
+          ],
+          "excluded": [
+            "Hardware",
+            "Manufacturing",
+            "Construction"
+          ],
+          "weight": 30
+        },
+        "geo": {
+          "countries": ["US", "UK", "CA", "DE", "NL"],
+          "weight": 15
+        },
+        "revenue_range": {
+          "min": "1M",
+          "max": "100M",
+          "weight": 20
+        }
+      }
+    },
+    "intent_signals": {
+      "enabled": true,
+      "signals": ["funding", "hiring"],
+      "min_score": 30
+    }
+  },
+
+  "target_roles": {
+    "seniority_priority": ["vp", "c_suite", "director"],
+    "functions": ["sales", "marketing", "growth", "revenue"],
+    "custom_titles": ["Founder", "Co-Founder", "Head of Growth", "Growth Lead"],
+    "exclude_titles": ["Assistant", "Coordinator", "Intern", "Student", "Junior", "Support"],
+    "contacts_by_company_size": {
+      "small": { "max_employees": 20, "contacts": 2 },
+      "medium": { "max_employees": 100, "contacts": 3 },
+      "large": { "min_employees": 100, "contacts": 4 }
+    }
+  },
+
+  "enrichment": {
+    "blitz_api": {
+      "enabled": true,
+      "find_decision_makers": true,
+      "enrich_emails": true,
+      "verify_employment": false
+    },
+    "existing_verification": {
+      "use_million_verifier": true,
+      "use_bounce_ban": true
+    }
+  },
+
+  "output": {
+    "format": "excel",
+    "sheet_name": "SaaS Companies TAM Q1 2026",
+    "min_quality_score": 55,
+    "include_reasoning": true,
+    "smartlead_ready": true
+  },
+
+  "deduplication": {
+    "company_fuzzy_threshold": 0.85,
+    "check_previous_campaigns": true,
+    "previous_contact_days": 90
+  }
+}
